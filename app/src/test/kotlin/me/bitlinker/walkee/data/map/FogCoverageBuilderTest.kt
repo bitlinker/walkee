@@ -17,11 +17,16 @@ class FogCoverageBuilderTest {
     private val displayZoom = 18
     private val storage = MapStorage(InMemoryChunkStore())
 
-    /** One display cell (z18) at Moscow's centre, i.e. a 4×4 block of storage cells. */
+    /** `log2` of a display cell side in storage cells. */
+    private val cellShift = FogGrid.STORAGE_ZOOM - displayZoom
+
+    /** One display cell (z18) at Moscow's centre, i.e. an 8×8 block of storage cells. */
     private val displayCell = TileKey.of(18, 158_464, 82_178)
-    private val cellsInDisplayCell = (0 until 4).flatMap { dy ->
-        (0 until 4).map { dx -> TileKey.of(20, (displayCell.x shl 2) + dx, (displayCell.y shl 2) + dy) }
+    private val cellsInDisplayCell = (0 until (1 shl cellShift)).flatMap { dy ->
+        (0 until (1 shl cellShift)).map { dx -> cell((displayCell.x shl cellShift) + dx, (displayCell.y shl cellShift) + dy) }
     }
+
+    private fun cell(x: Int, y: Int) = TileKey.of(FogGrid.STORAGE_ZOOM, x, y)
 
     @Test
     fun `empty storage yields all-closed coverage`() {
@@ -72,23 +77,23 @@ class FogCoverageBuilderTest {
     fun `far-out tiles report densities against the right capacity`() {
         storage.markVisited(cellsInDisplayCell)
         val other = TileKey.of(18, displayCell.x + 3, displayCell.y + 2) // same z16 tile, another display cell
-        storage.markVisited(listOf(TileKey.of(20, other.x shl 2, other.y shl 2)))
+        storage.markVisited(listOf(cell(other.x shl cellShift, other.y shl cellShift)))
 
         val z9 = FogCoverageBuilder.build(storage, displayCell.ancestor(9), displayZoom)
         assertEquals(256, z9.side)
         assertEquals(4, z9.capacity)
         assertEquals(2, z9.openCounts.sum())
 
-        // Grid cells are chunks (z12 == chunk zoom): 4^(18-12) display cells each.
-        val z4 = FogCoverageBuilder.build(storage, displayCell.ancestor(4), displayZoom)
-        assertEquals(256, z4.side)
-        assertEquals(1 shl 12, z4.capacity)
-        assertEquals(2, z4.openCounts.sum())
+        // Grid cells are chunks (z13 == chunk zoom): 4^(18-13) display cells each.
+        val z5 = FogCoverageBuilder.build(storage, displayCell.ancestor(5), displayZoom)
+        assertEquals(256, z5.side)
+        assertEquals(1 shl 10, z5.capacity)
+        assertEquals(2, z5.openCounts.sum())
 
         // Grid cells are 2×2 chunks.
-        val z3 = FogCoverageBuilder.build(storage, displayCell.ancestor(3), displayZoom)
-        assertEquals(1 shl 14, z3.capacity)
-        assertEquals(2, z3.openCounts.sum())
+        val z4 = FogCoverageBuilder.build(storage, displayCell.ancestor(4), displayZoom)
+        assertEquals(1 shl 12, z4.capacity)
+        assertEquals(2, z4.openCounts.sum())
 
         val root = FogCoverageBuilder.build(storage, TileKey.ROOT, displayZoom)
         assertEquals(2, root.openCounts.sum())
@@ -100,8 +105,8 @@ class FogCoverageBuilderTest {
         // Two display cells in adjacent chunks, both inside one z11 tile.
         val chunk = displayCell.ancestor(FogGrid.CHUNK_ZOOM)
         val nextChunk = TileKey.of(FogGrid.CHUNK_ZOOM, chunk.x + 1, chunk.y)
-        val a = TileKey.of(20, chunk.x shl 8 or 255, chunk.y shl 8)
-        val b = TileKey.of(20, nextChunk.x shl 8, nextChunk.y shl 8)
+        val a = cell(chunk.x shl FogGrid.CHUNK_SHIFT or FogGrid.CHUNK_SIDE - 1, chunk.y shl FogGrid.CHUNK_SHIFT)
+        val b = cell(nextChunk.x shl FogGrid.CHUNK_SHIFT, nextChunk.y shl FogGrid.CHUNK_SHIFT)
         storage.markVisited(listOf(a, b))
         assertEquals(2, storage.chunkCount)
 
@@ -138,10 +143,10 @@ class FogCoverageBuilderTest {
         val cornerX = (chunk.x + 1) shl FogGrid.CHUNK_SHIFT
         val cornerY = (chunk.y + 1) shl FogGrid.CHUNK_SHIFT
         val random = Random(11)
-        storage.markVisited(List(400) { TileKey.of(20, cornerX + random.nextInt(-48, 48), cornerY + random.nextInt(-48, 48)) })
-        val corner = TileKey.of(20, cornerX, cornerY)
+        storage.markVisited(List(400) { cell(cornerX + random.nextInt(-96, 96), cornerY + random.nextInt(-96, 96)) })
+        val corner = cell(cornerX, cornerY)
 
-        for (zoom in listOf(10, 13, 16, 17, 18, 19, 20)) {
+        for (zoom in listOf(10, 13, 16, 17, 18, 19, 20, 21)) {
             val southEast = corner.ancestor(zoom)
             for (tile in listOf(southEast, TileKey.of(zoom, southEast.x - 1, southEast.y - 1))) {
                 val coverage = FogCoverageBuilder.build(storage, tile, displayZoom, margin = 2)
@@ -173,7 +178,7 @@ class FogCoverageBuilderTest {
 
     @Test
     fun `margins wrap across the antimeridian and stay closed beyond the poles`() {
-        storage.markVisited(listOf(TileKey.of(20, (1 shl 20) - 1, 0)))
+        storage.markVisited(listOf(cell((1 shl FogGrid.STORAGE_ZOOM) - 1, 0)))
         val coverage = FogCoverageBuilder.build(storage, TileKey.of(displayZoom, 0, 0), displayZoom, margin = 2)
         assertEquals(1, coverage.count(-1, 0))
         assertEquals(1, coverage.openCounts.sum())
@@ -185,7 +190,7 @@ class FogCoverageBuilderTest {
         val before = fingerprint(2)
         val withoutMargin = fingerprint(0)
 
-        storage.markVisited(listOf(TileKey.of(20, (displayCell.x + 1) shl 2, displayCell.y shl 2)))
+        storage.markVisited(listOf(cell((displayCell.x + 1) shl cellShift, displayCell.y shl cellShift)))
         assertTrue(before != fingerprint(2))
         assertEquals(withoutMargin, fingerprint(0))
     }
@@ -199,7 +204,7 @@ class FogCoverageBuilderTest {
 
     @Test
     fun `rejects display zoom outside the chunk-to-storage range`() {
-        assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, 11) }
-        assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, 21) }
+        assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, FogGrid.CHUNK_ZOOM - 1) }
+        assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, FogGrid.STORAGE_ZOOM + 1) }
     }
 }

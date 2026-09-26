@@ -17,7 +17,7 @@ import java.util.zip.Inflater
  *
  * ```
  * u32  magic "WKFC"
- * u8   format version (1)
+ * u8   format version (2; version 1 stored z20 cells in z12 chunks and is obsolete)
  * i64  packed TileKey of the chunk
  * i32  visited cell count
  * u8   state: 0 = PARTIAL (bitmap follows), 1 = FULL (no bitmap)
@@ -27,7 +27,7 @@ import java.util.zip.Inflater
  */
 object ChunkCodec {
     private const val MAGIC = 0x574B4643 // "WKFC"
-    private const val VERSION = 1
+    private const val VERSION = 2
     private const val STATE_PARTIAL = 0
     private const val STATE_FULL = 1
     private const val BITMAP_BYTES = Chunk.WORDS * Long.SIZE_BYTES
@@ -51,12 +51,16 @@ object ChunkCodec {
         return out.toByteArray()
     }
 
-    /** @throws IOException on malformed input, including a bitmap that disagrees with the stored count. */
+    /**
+     * @throws ObsoleteChunkException for a chunk written by an earlier format version.
+     * @throws IOException on malformed input, including a bitmap that disagrees with the stored count.
+     */
     fun decode(bytes: ByteArray): Chunk {
         DataInputStream(bytes.inputStream()).use { data ->
             val magic = data.readInt()
             if (magic != MAGIC) throw IOException("Not a chunk file (magic 0x${magic.toString(16)})")
             val version = data.readUnsignedByte()
+            if (version < VERSION) throw ObsoleteChunkException("Chunk format version $version is obsolete")
             if (version != VERSION) throw IOException("Unsupported chunk format version $version")
             val key = TileKey(data.readLong())
             if (key.zoom != FogGrid.CHUNK_ZOOM) throw IOException("Chunk key $key is not at zoom ${FogGrid.CHUNK_ZOOM}")
@@ -130,3 +134,6 @@ object ChunkCodec {
         }
     }
 }
+
+/** A chunk in an obsolete format or grid layout; it cannot be converted and should be discarded. */
+class ObsoleteChunkException(message: String) : IOException(message)

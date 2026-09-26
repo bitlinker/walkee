@@ -14,11 +14,11 @@ import kotlin.random.Random
 class HexLatticeTest {
 
     /** Moscow's centre in storage cells (see FogGridTest). */
-    private val originX = 633_856
-    private val originY = 328_712
+    private val originX = 1_267_712
+    private val originY = 657_424
 
     @ParameterizedTest(name = "display zoom {0}")
-    @ValueSource(ints = [16, 17, 18, 19])
+    @ValueSource(ints = [16, 17, 18, 19, 20])
     fun `hexAt is the nearest centre, ties included`(displayZoom: Int) {
         val lattice = HexLattice(displayZoom)
         val random = Random(displayZoom)
@@ -34,10 +34,10 @@ class HexLatticeTest {
     }
 
     @ParameterizedTest(name = "display zoom {0}")
-    @ValueSource(ints = [16, 17, 18, 19])
+    @ValueSource(ints = [16, 17, 18, 19, 20])
     fun `every hexagon holds storage cells in proportion to its area`(displayZoom: Int) {
         val lattice = HexLattice(displayZoom)
-        val span = (lattice.width * 12).toInt()
+        val span = (lattice.width * 24).toInt()
         val cellsPerHex = HashMap<HexKey, Int>()
         for (y in 0 until span) for (x in 0 until span) {
             cellsPerHex.merge(lattice.hexAt(originX + x + 0.5, originY + y + 0.5), 1, Int::plus)
@@ -53,11 +53,12 @@ class HexLatticeTest {
         assertTrue(inner.all { it >= 1 }, "empty hexagon at zoom $displayZoom")
         assertTrue(inner.all { abs(it - area) <= area / 4 + 1 }, "cells per hexagon ${inner.min()}..${inner.max()}, area $area")
         assertEquals(area, inner.average(), area * 0.02)
-        if (displayZoom == 18) assertTrue(inner.all { it in 12..16 })
+        // Four cells wide: 14 cells per hexagon on average.
+        if (displayZoom == 19) assertTrue(inner.all { it in 12..16 })
     }
 
     @ParameterizedTest(name = "display zoom {0}")
-    @ValueSource(ints = [16, 18, 19])
+    @ValueSource(ints = [16, 18, 20])
     fun `edge-adjacent storage cells fall into the same or adjacent hexagons`(displayZoom: Int) {
         val lattice = HexLattice(displayZoom)
         for (y in 0 until 60) for (x in 0 until 60) {

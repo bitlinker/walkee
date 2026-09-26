@@ -60,6 +60,16 @@ class ChunkCodecTest {
     }
 
     @Test
+    fun `earlier format versions are obsolete, later ones unsupported`() {
+        val bytes = ChunkCodec.encode(Chunk.empty(key).plus(intArrayOf(1, 2, 3)))
+        bytes[4] = 1
+        assertThrows(ObsoleteChunkException::class.java) { ChunkCodec.decode(bytes) }
+        bytes[4] = 3
+        val error = assertThrows(IOException::class.java) { ChunkCodec.decode(bytes) }
+        assertTrue(error !is ObsoleteChunkException)
+    }
+
+    @Test
     fun `detects a bitmap that disagrees with the header count`() {
         val bytes = ChunkCodec.encode(Chunk.empty(key).plus(intArrayOf(1, 2, 3)))
         // visitedCount is the i32 right after magic(4) + version(1) + key(8).

@@ -27,14 +27,16 @@ class HexFogTilePainterTest {
     private val storage = MapStorage(InMemoryChunkStore())
 
     /** Moscow's centre (see FogGridTest). */
-    private val cell = TileKey.of(20, 633_856, 328_712)
+    private val cell = cell(1_267_712, 657_424)
+
+    private fun cell(x: Int, y: Int) = TileKey.of(FogGrid.STORAGE_ZOOM, x, y)
 
     @ParameterizedTest(name = "tile zoom {0}")
-    @ValueSource(ints = [12, 14, 16, 17, 18, 20, 22])
+    @ValueSource(ints = [12, 14, 16, 17, 18, 20, 21, 23])
     fun `every pixel equals its 4×4 supersampled open share`(zoom: Int) {
-        // ~5 % of cells: about half of the hexagons open.
+        // ~1.25 % of cells: about half of the 56-cell hexagons open.
         val random = Random(zoom)
-        storage.markVisited(List(8000) { TileKey.of(20, cell.x - 200 + random.nextInt(400), cell.y - 200 + random.nextInt(400)) })
+        storage.markVisited(List(8000) { cell(cell.x - 400 + random.nextInt(800), cell.y - 400 + random.nextInt(800)) })
         val coverage = mixedCoverageNear(tileAt(zoom))
 
         val pixels = HexFogTilePainter.paint(coverage, style)
@@ -46,15 +48,17 @@ class HexFogTilePainterTest {
 
     @Test
     fun `a single open hexagon is tinted inside, fog outside, antialiased along its edges`() {
-        val middle = TileKey.of(20, cell.x + 8, cell.y) // 8 cells into its z16 tile both ways
+        val middle = cell(cell.x + 16, cell.y) // 16 cells into its z16 tile both ways
         storage.markVisited(listOf(middle))
-        val tile = middle.ancestor(16) // hexagons are 64 px wide
+        val tile = middle.ancestor(16) // 32 cells, so hexagons are 64 px wide
+        val tileSide = 1 shl (FogGrid.STORAGE_ZOOM - 16)
         val coverage = HexCoverageBuilder.build(storage, tile, lattice)
         val pixels = HexFogTilePainter.paint(coverage, style)
 
         val hex = lattice.hexAt(middle.x + 0.5, middle.y + 0.5)
-        val pixelSide = 16.0 / size
-        fun pixelOf(x: Double, y: Double) = ((y - tile.y * 16) / pixelSide).toInt() * size + ((x - tile.x * 16) / pixelSide).toInt()
+        val pixelSide = tileSide.toDouble() / size
+        fun pixelOf(x: Double, y: Double) =
+            ((y - tile.y * tileSide) / pixelSide).toInt() * size + ((x - tile.x * tileSide) / pixelSide).toInt()
         val centreX = lattice.centerX(hex.row, hex.col)
         val centreY = lattice.centerY(hex.row)
         assertEquals(tint, pixels[pixelOf(centreX, centreY)])

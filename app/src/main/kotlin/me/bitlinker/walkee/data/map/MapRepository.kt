@@ -76,6 +76,7 @@ class MapRepository @Inject constructor(
             for (failure in result.failures) {
                 Log.w(TAG, "Skipped corrupt chunk ${failure.source}", failure.error)
             }
+            if (result.discarded > 0) Log.i(TAG, "Deleted ${result.discarded} chunks in an obsolete format")
             loaded = true
             publishProgress()
             fullInvalidations.tryEmit(FogInvalidation.All)

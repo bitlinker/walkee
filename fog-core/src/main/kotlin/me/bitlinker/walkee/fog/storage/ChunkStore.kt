@@ -8,7 +8,10 @@ import java.nio.file.StandardCopyOption
 
 /** Durable storage of chunks. Implementations are blocking; callers pick the thread. */
 interface ChunkStore {
-    /** Loads every stored chunk. Unreadable chunks are skipped and reported in [LoadResult.failures]. */
+    /**
+     * Loads every stored chunk. Unreadable chunks are skipped and reported in [LoadResult.failures];
+     * chunks in an obsolete format are deleted and counted in [LoadResult.discarded].
+     */
     fun loadAll(): LoadResult
 
     /** Persists the given snapshots, replacing earlier versions of the same chunks. */
@@ -17,7 +20,7 @@ interface ChunkStore {
     /** Removes every stored chunk. */
     fun deleteAll()
 
-    data class LoadResult(val chunks: List<Chunk>, val failures: List<Failure>) {
+    data class LoadResult(val chunks: List<Chunk>, val failures: List<Failure>, val discarded: Int = 0) {
         data class Failure(val source: String, val error: Exception)
     }
 }
@@ -42,7 +45,8 @@ class InMemoryChunkStore : ChunkStore {
 /**
  * One file per chunk in [directory]: `<packed key as 16 hex digits>.chunk` in [ChunkCodec] format.
  * Writes go to a temp file and are moved into place, so a crash never leaves a half-written chunk.
- * Files that fail to decode are renamed to `*.corrupt` and reported instead of aborting the load.
+ * Files that fail to decode are renamed to `*.corrupt` and reported instead of aborting the load;
+ * files in an obsolete format ([ObsoleteChunkException]) are deleted.
  */
 class FileChunkStore(private val directory: File) : ChunkStore {
 
@@ -51,15 +55,19 @@ class FileChunkStore(private val directory: File) : ChunkStore {
             ?: return ChunkStore.LoadResult(emptyList(), emptyList())
         val chunks = ArrayList<Chunk>(files.size)
         val failures = ArrayList<ChunkStore.LoadResult.Failure>()
+        var discarded = 0
         for (file in files.sortedBy { it.name }) {
             try {
                 chunks += ChunkCodec.decode(file.readBytes())
+            } catch (e: ObsoleteChunkException) {
+                discarded++
+                file.delete()
             } catch (e: IOException) {
                 failures += ChunkStore.LoadResult.Failure(file.name, e)
                 file.renameTo(File(directory, file.name + CORRUPT_SUFFIX))
             }
         }
-        return ChunkStore.LoadResult(chunks, failures)
+        return ChunkStore.LoadResult(chunks, failures, discarded)
     }
 
     override fun save(chunks: Collection<Chunk>) {

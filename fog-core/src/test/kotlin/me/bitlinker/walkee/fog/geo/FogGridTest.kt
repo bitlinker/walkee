@@ -10,10 +10,10 @@ class FogGridTest {
 
     @Test
     fun `Moscow centre lands in the expected tiles`() {
-        assertEquals(TileKey.of(12, 2476, 1284), FogGrid.tileAt(moscow, 12))
+        assertEquals(TileKey.of(13, 4952, 2568), FogGrid.tileAt(moscow, 13))
         assertEquals(TileKey.of(18, 158_464, 82_178), FogGrid.tileAt(moscow, 18))
-        assertEquals(TileKey.of(20, 633_856, 328_712), FogGrid.cellAt(moscow))
-        assertEquals(FogGrid.tileAt(moscow, 12), FogGrid.chunkOf(FogGrid.cellAt(moscow)))
+        assertEquals(TileKey.of(21, 1_267_712, 657_424), FogGrid.cellAt(moscow))
+        assertEquals(FogGrid.tileAt(moscow, 13), FogGrid.chunkOf(FogGrid.cellAt(moscow)))
     }
 
     @Test
@@ -21,17 +21,17 @@ class FogGridTest {
         val cell = FogGrid.cellAt(moscow)
         val chunk = FogGrid.chunkOf(cell)
         val index = FogGrid.localIndex(cell)
-        assertEquals((328_712 and 255) * 256 + (633_856 and 255), index)
+        assertEquals((657_424 and 255) * 256 + (1_267_712 and 255), index)
         assertEquals(cell, FogGrid.cellOf(chunk, index))
 
-        assertEquals(TileKey.of(20, 2476 shl 8, 1284 shl 8), FogGrid.cellOf(chunk, 0))
-        assertEquals(TileKey.of(20, (2476 shl 8) + 255, (1284 shl 8) + 255), FogGrid.cellOf(chunk, FogGrid.CHUNK_CELLS - 1))
+        assertEquals(TileKey.of(21, 4952 shl 8, 2568 shl 8), FogGrid.cellOf(chunk, 0))
+        assertEquals(TileKey.of(21, (4952 shl 8) + 255, (2568 shl 8) + 255), FogGrid.cellOf(chunk, FogGrid.CHUNK_CELLS - 1))
     }
 
     @Test
     fun `local index rejects non-cells`() {
         assertThrows(IllegalArgumentException::class.java) { FogGrid.localIndex(TileKey.of(18, 0, 0)) }
-        assertThrows(IllegalArgumentException::class.java) { FogGrid.cellOf(TileKey.of(11, 0, 0), 0) }
+        assertThrows(IllegalArgumentException::class.java) { FogGrid.cellOf(TileKey.of(12, 0, 0), 0) }
     }
 
     @Test
@@ -50,7 +50,7 @@ class FogGridTest {
     }
 
     @Test
-    fun `storage cell in Moscow is about 21 metres`() {
-        assertEquals(21.56, FogGrid.cellSizeMetres(moscow.latitude), 0.01)
+    fun `storage cell in Moscow is about 11 metres`() {
+        assertEquals(10.78, FogGrid.cellSizeMetres(moscow.latitude), 0.01)
     }
 }

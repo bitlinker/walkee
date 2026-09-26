@@ -70,7 +70,7 @@ class FogBrushTest {
 
     @Test
     fun `exact diagonal through cell corners never leaves corner-only contacts`() {
-        // Corners of z20 cells: pick a cell corner in world units and go diagonally to another corner.
+        // Corners of storage cells: pick a cell corner in world units and go diagonally to another corner.
         val origin = FogGrid.tileOrigin(FogGrid.cellAt(moscow))
         val side = 1.0 / (1 shl FogGrid.STORAGE_ZOOM)
         val from = Epsg3395.toGeo(WorldPoint(origin.x + 1e-12, origin.y + 1e-12))

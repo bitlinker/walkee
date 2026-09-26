@@ -10,23 +10,23 @@ import org.junit.jupiter.api.Test
 
 class SettingsReducerTest {
 
-    private val loaded = reduceSettings(SettingsState(), SettingsAction.StyleLoaded(FogStyle(displayZoom = 20)))
+    private val loaded = reduceSettings(SettingsState(), SettingsAction.StyleLoaded(FogStyle(displayZoom = 21)))
 
     @Test
     fun `switching to hexagons pulls the display zoom into their range`() {
         val hexagons = reduceSettings(loaded, SettingsAction.CellShapeChanged(FogCellShape.HEXAGONS))
         assertEquals(FogCellShape.HEXAGONS, hexagons.cellShape)
-        assertEquals(19, hexagons.displayZoom)
+        assertEquals(20, hexagons.displayZoom)
 
         val squares = reduceSettings(hexagons, SettingsAction.CellShapeChanged(FogCellShape.SQUARES))
-        assertEquals(19, squares.displayZoom)
+        assertEquals(20, squares.displayZoom)
     }
 
     @Test
     fun `display zoom is limited by the current shape`() {
         val hexagons = reduceSettings(loaded, SettingsAction.CellShapeChanged(FogCellShape.HEXAGONS))
-        assertEquals(19, reduceSettings(hexagons, SettingsAction.DisplayZoomChanged(20)).displayZoom)
-        assertEquals(20, reduceSettings(loaded, SettingsAction.DisplayZoomChanged(20)).displayZoom)
+        assertEquals(20, reduceSettings(hexagons, SettingsAction.DisplayZoomChanged(21)).displayZoom)
+        assertEquals(21, reduceSettings(loaded, SettingsAction.DisplayZoomChanged(21)).displayZoom)
         assertEquals(16, reduceSettings(loaded, SettingsAction.DisplayZoomChanged(3)).displayZoom)
     }
 
@@ -64,7 +64,7 @@ class SettingsReducerTest {
 
     @Test
     fun `cell size in metres follows the display zoom`() {
-        assertEquals(22, loaded.displayCellMetres)
+        assertEquals(11, loaded.displayCellMetres)
         assertEquals(86, reduceSettings(loaded, SettingsAction.DisplayZoomChanged(18)).displayCellMetres)
     }
 

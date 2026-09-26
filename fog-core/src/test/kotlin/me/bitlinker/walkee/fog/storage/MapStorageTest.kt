@@ -15,14 +15,14 @@ import java.io.IOException
 
 class MapStorageTest {
 
-    // A 2×2 block of z20 cells that fits inside one z19 tile and one z18 tile.
-    private val baseX = 633_856
-    private val baseY = 328_712
+    // A 2×2 block of z21 cells that fits inside one z20 tile and one z19 tile.
+    private val baseX = 1_267_712
+    private val baseY = 657_424
     private val block = listOf(
-        TileKey.of(20, baseX, baseY),
-        TileKey.of(20, baseX + 1, baseY),
-        TileKey.of(20, baseX, baseY + 1),
-        TileKey.of(20, baseX + 1, baseY + 1),
+        TileKey.of(21, baseX, baseY),
+        TileKey.of(21, baseX + 1, baseY),
+        TileKey.of(21, baseX, baseY + 1),
+        TileKey.of(21, baseX + 1, baseY + 1),
     )
     private val chunkKey = block.first().ancestor(FogGrid.CHUNK_ZOOM)
 
@@ -31,7 +31,7 @@ class MapStorageTest {
     @Test
     fun `marks cells and counts them at every zoom`() {
         val storage = newStorage()
-        val change = storage.markVisited(block + TileKey.of(20, baseX + 40, baseY))
+        val change = storage.markVisited(block + TileKey.of(21, baseX + 40, baseY))
 
         assertEquals(setOf(chunkKey), change.chunks)
         assertEquals(5, change.addedCells)
@@ -39,12 +39,12 @@ class MapStorageTest {
         assertEquals(1, storage.chunkCount)
 
         assertTrue(storage.isVisited(block[0]))
-        assertFalse(storage.isVisited(TileKey.of(20, baseX + 2, baseY)))
+        assertFalse(storage.isVisited(TileKey.of(21, baseX + 2, baseY)))
 
         assertEquals(1L, storage.visitedCount(block[0]))
         assertEquals(1L, storage.visitedCount(block[0].child(3)), "above storage zoom the enclosing cell decides")
+        assertEquals(4L, storage.visitedCount(block[0].ancestor(20)))
         assertEquals(4L, storage.visitedCount(block[0].ancestor(19)))
-        assertEquals(4L, storage.visitedCount(block[0].ancestor(18)))
         assertEquals(5L, storage.visitedCount(block[0].ancestor(14)))
         assertEquals(5L, storage.visitedCount(chunkKey))
         assertEquals(5L, storage.visitedCount(chunkKey.ancestor(5)))
@@ -67,8 +67,8 @@ class MapStorageTest {
     fun `rejects non-cell keys`() {
         val storage = newStorage()
         assertThrows(IllegalArgumentException::class.java) { storage.markVisited(listOf(TileKey.of(18, 0, 0))) }
-        assertThrows(IllegalArgumentException::class.java) { storage.isVisited(TileKey.of(19, 0, 0)) }
-        assertThrows(IllegalArgumentException::class.java) { storage.chunk(TileKey.of(11, 0, 0)) }
+        assertThrows(IllegalArgumentException::class.java) { storage.isVisited(TileKey.of(20, 0, 0)) }
+        assertThrows(IllegalArgumentException::class.java) { storage.chunk(TileKey.of(12, 0, 0)) }
     }
 
     @Test
@@ -81,7 +81,7 @@ class MapStorageTest {
             assertEquals(4, first.addedCells)
 
             storage.markVisited(block) // no-op → nothing emitted
-            val farAway = TileKey.of(20, 100, 100)
+            val farAway = TileKey.of(21, 100, 100)
             storage.markVisited(listOf(block[0], farAway))
             val second = awaitItem()
             assertEquals(setOf(farAway.ancestor(FogGrid.CHUNK_ZOOM)), second.chunks)
@@ -93,8 +93,8 @@ class MapStorageTest {
     @Test
     fun `chunksWithin scans the Morton range`() {
         val storage = newStorage()
-        val neighbourChunkCell = TileKey.of(20, baseX + FogGrid.CHUNK_SIDE, baseY)
-        val farCell = TileKey.of(20, 100, 100)
+        val neighbourChunkCell = TileKey.of(21, baseX + FogGrid.CHUNK_SIDE, baseY)
+        val farCell = TileKey.of(21, 100, 100)
         storage.markVisited(listOf(block[0], neighbourChunkCell, farCell))
         assertEquals(3, storage.chunkCount)
 
@@ -114,7 +114,7 @@ class MapStorageTest {
     fun `flush writes dirty chunks and load restores them`(@TempDir dir: File) {
         val storage = newStorage(FileChunkStore(dir))
         assertEquals(0, storage.flush())
-        storage.markVisited(block + TileKey.of(20, 100, 100))
+        storage.markVisited(block + TileKey.of(21, 100, 100))
         assertTrue(storage.hasUnsavedChanges)
 
         assertEquals(2, storage.flush())
@@ -122,7 +122,7 @@ class MapStorageTest {
         assertEquals(0, storage.flush())
         assertEquals(2, dir.listFiles { f -> f.name.endsWith(".chunk") }!!.size)
 
-        storage.markVisited(listOf(TileKey.of(20, baseX + 7, baseY)))
+        storage.markVisited(listOf(TileKey.of(21, baseX + 7, baseY)))
         assertEquals(1, storage.flush(), "only the changed chunk is rewritten")
 
         val restored = newStorage(FileChunkStore(dir))
@@ -131,8 +131,8 @@ class MapStorageTest {
         assertEquals(2, result.chunks.size)
         assertEquals(6L, restored.visitedCellCount)
         assertTrue(restored.isVisited(block[3]))
-        assertTrue(restored.isVisited(TileKey.of(20, baseX + 7, baseY)))
-        assertTrue(restored.isVisited(TileKey.of(20, 100, 100)))
+        assertTrue(restored.isVisited(TileKey.of(21, baseX + 7, baseY)))
+        assertTrue(restored.isVisited(TileKey.of(21, 100, 100)))
         assertEquals(5L, restored.visitedCount(chunkKey))
         assertEquals(6L, restored.visitedCount(TileKey.ROOT))
         assertFalse(restored.hasUnsavedChanges)
@@ -156,6 +156,22 @@ class MapStorageTest {
     }
 
     @Test
+    fun `chunks in an obsolete format are deleted, not quarantined`(@TempDir dir: File) {
+        val storage = newStorage(FileChunkStore(dir))
+        storage.markVisited(block)
+        storage.flush()
+        val legacy = ChunkCodec.encode(Chunk.full(chunkKey)).also { it[4] = 1 } // format version 1
+        File(dir, "0123456789abcdef.chunk").writeBytes(legacy)
+
+        val result = newStorage(FileChunkStore(dir)).load()
+        assertEquals(1, result.chunks.size)
+        assertTrue(result.failures.isEmpty())
+        assertEquals(1, result.discarded)
+        assertEquals(1, dir.list()!!.size)
+        assertFalse(File(dir, "0123456789abcdef.chunk").exists())
+    }
+
+    @Test
     fun `failed flush keeps chunks dirty`() {
         val failing = object : ChunkStore {
             override fun loadAll() = ChunkStore.LoadResult(emptyList(), emptyList())
@@ -173,7 +189,7 @@ class MapStorageTest {
         val storage = newStorage(FileChunkStore(dir))
         storage.markVisited(block)
         storage.flush()
-        storage.markVisited(listOf(TileKey.of(20, 100, 100))) // unsaved
+        storage.markVisited(listOf(TileKey.of(21, 100, 100))) // unsaved
         File(dir, "deadbeef00000000.chunk.corrupt").writeBytes(ByteArray(4))
         File(dir, "unrelated.txt").writeText("keep")
 
@@ -224,10 +240,10 @@ class MapStorageTest {
         first.flush()
 
         val second = newStorage(store)
-        second.markVisited(listOf(TileKey.of(20, 100, 100)))
+        second.markVisited(listOf(TileKey.of(21, 100, 100)))
         second.load()
         assertEquals(4L, second.visitedCellCount)
-        assertFalse(second.isVisited(TileKey.of(20, 100, 100)))
+        assertFalse(second.isVisited(TileKey.of(21, 100, 100)))
         assertFalse(second.hasUnsavedChanges)
     }
 }

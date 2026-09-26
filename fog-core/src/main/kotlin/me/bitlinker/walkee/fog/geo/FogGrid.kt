@@ -3,15 +3,15 @@ package me.bitlinker.walkee.fog.geo
 /**
  * Layout of the fog-of-war grid on top of the EPSG:3395 tile pyramid (ADR 0001, 0002).
  *
- * - A *storage cell* is a tile at [STORAGE_ZOOM] (z20, ~20–28 m across Russia); one bit each.
- * - A *chunk* is a tile at [CHUNK_ZOOM] (z12), i.e. a `256 × 256` square of storage cells.
+ * - A *storage cell* is a tile at [STORAGE_ZOOM] (z21, ~10–14 m across Russia); one bit each.
+ * - A *chunk* is a tile at [CHUNK_ZOOM] (z13), i.e. a `256 × 256` square of storage cells.
  *
  * The zoom at which cells are *displayed* (z18 in the first version) is a rendering parameter
  * and deliberately not part of the storage layout.
  */
 object FogGrid {
-    const val STORAGE_ZOOM = 20
-    const val CHUNK_ZOOM = 12
+    const val STORAGE_ZOOM = 21
+    const val CHUNK_ZOOM = 13
 
     /** `log2` of a chunk side measured in storage cells. */
     const val CHUNK_SHIFT = STORAGE_ZOOM - CHUNK_ZOOM
