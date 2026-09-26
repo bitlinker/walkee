@@ -50,7 +50,7 @@ class MapFogLayerRenderer @Inject constructor(
     private val observeFogStyle: ObserveFogStyleUseCase,
 ) {
     private val style = AtomicReference(FogStyle())
-    private val solidTileCache = AtomicReference<Pair<FogStyle, ByteArray>?>(null)
+    private val uniformTileCache = AtomicReference<UniformTiles?>(null)
     private val dataVersion = AtomicLong(1)
     private var layer: Layer? = null
     private var tileDataSource: TileDataSource? = null
@@ -131,17 +131,19 @@ class MapFogLayerRenderer @Inject constructor(
         "${style.hashCode().toUInt().toString(16)}-${coverage.fingerprint().toULong().toString(16)}"
 
     private fun encode(coverage: FogCoverage, style: FogStyle): ByteArray {
-        if (coverage.isAllOpen) return TRANSPARENT_TILE
-        if (coverage.isAllClosed) return solidTile(style)
+        if (coverage.isAllOpen) return uniformTiles(style).revealed
+        if (coverage.isAllClosed) return uniformTiles(style).hidden
         return toPng(FogTilePainter.paint(coverage, style))
     }
 
-    private fun solidTile(style: FogStyle): ByteArray {
-        solidTileCache.get()?.let { (cachedStyle, bytes) -> if (cachedStyle == style) return bytes }
-        val bytes = toPng(FogTilePainter.solid(style))
-        solidTileCache.set(style to bytes)
-        return bytes
+    /** Most tiles are entirely hidden or entirely revealed; their PNGs are encoded once per style. */
+    private fun uniformTiles(style: FogStyle): UniformTiles {
+        uniformTileCache.get()?.let { if (it.style == style) return it }
+        return UniformTiles(style, toPng(FogTilePainter.solid(style)), toPng(FogTilePainter.revealed(style)))
+            .also { uniformTileCache.set(it) }
     }
+
+    private class UniformTiles(val style: FogStyle, val hidden: ByteArray, val revealed: ByteArray)
 
     private fun layerOptions() = LayerOptions(
         /* active = */ true,
@@ -161,8 +163,6 @@ class MapFogLayerRenderer @Inject constructor(
         const val LAYER_ID = "walkee_fog"
         const val MAX_ZOOM_EXCLUSIVE = 24
         val REFRESH_DEBOUNCE = 400.milliseconds
-
-        val TRANSPARENT_TILE: ByteArray = toPng(IntArray(FogTilePainter.TILE_SIZE * FogTilePainter.TILE_SIZE))
 
         fun toPng(pixels: IntArray): ByteArray =
             IndexedPngEncoder.encode(pixels, FogTilePainter.TILE_SIZE, FogTilePainter.TILE_SIZE)

@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.ui.map
 
+import android.util.Log
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
@@ -38,6 +39,10 @@ class MapRenderer(
 
     fun start(scope: CoroutineScope) {
         map.addCameraListener(WeakReference(cameraListener))
+        // Flat buildings: 3D extrusions are drawn above every tile layer and would stick out of
+        // the fog (ADR 0003).
+        map.set2DMode(true)
+        if (!map.setMapStyle(MAP_STYLE)) Log.w(TAG, "Map style was rejected")
         fogLayerRenderer.attach(map, scope)
 
         scope.launch {
@@ -90,6 +95,15 @@ class MapRenderer(
     }
 
     private companion object {
+        const val TAG = "MapRenderer"
+
+        /**
+         * Base-map labels are drawn above every layer and cannot be covered by the fog, so the
+         * busiest ones are hidden everywhere: POIs and house numbers. Street and district names
+         * and transit stops stay (ADR 0003).
+         */
+        const val MAP_STYLE = """[{"tags":{"any":["poi","address"]},"stylers":{"visibility":"off"}}]"""
+
         const val INITIAL_ZOOM = 16f
         const val MIN_FOLLOW_ZOOM = 13f
         const val ANIMATION_SECONDS = 0.6f

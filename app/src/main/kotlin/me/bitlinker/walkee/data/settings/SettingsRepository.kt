@@ -13,16 +13,25 @@ import me.bitlinker.walkee.fog.geo.FogGrid
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** How the fog layer is drawn. `displayZoom` is the zoom of one visible "pixel" (ADR 0001). */
+/**
+ * How the fog layer is drawn. `displayZoom` is the zoom of one visible "pixel" (ADR 0001).
+ * Hidden cells get the fog colour at [opacity]; revealed cells get a light tint of the yellow
+ * brand accent at [revealedOpacity] (ADR 0003).
+ */
 data class FogStyle(
     val opacity: Float = DEFAULT_OPACITY,
     val displayZoom: Int = DEFAULT_DISPLAY_ZOOM,
     val colorRgb: Int = DEFAULT_COLOR_RGB,
+    val revealedOpacity: Float = DEFAULT_REVEALED_OPACITY,
+    val revealedColorRgb: Int = DEFAULT_REVEALED_COLOR_RGB,
 ) {
     companion object {
-        const val DEFAULT_OPACITY = 0.85f
+        const val DEFAULT_OPACITY = 0.75f
         const val DEFAULT_DISPLAY_ZOOM = 18
         const val DEFAULT_COLOR_RGB = 0x1B1B1F
+        const val DEFAULT_REVEALED_OPACITY = 0.1f
+        /** The theme's accent yellow (`Yellow80` in `ui/theme`). */
+        const val DEFAULT_REVEALED_COLOR_RGB = 0xFFD600
         val DISPLAY_ZOOM_RANGE = 16..FogGrid.STORAGE_ZOOM
         val OPACITY_RANGE = 0.3f..1f
     }
