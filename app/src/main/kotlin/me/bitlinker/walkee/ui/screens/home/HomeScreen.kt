@@ -1,6 +1,7 @@
 package me.bitlinker.walkee.ui.screens.home
 
 import android.Manifest
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -53,12 +54,12 @@ fun HomeRoute(viewModel: HomeViewModel = hiltViewModel()) {
 @Composable
 fun HomeScreen(state: HomeState, dispatch: (HomeAction) -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        dispatch(HomeAction.PermissionResult(granted = result.values.any { it }))
+        dispatch(HomeAction.PermissionResult(granted = LOCATION_PERMISSIONS.any { result[it] == true }))
     }
     LaunchedEffect(state.permissionRequestPending) {
         if (state.permissionRequestPending) {
             dispatch(HomeAction.PermissionRequestLaunched)
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+            permissionLauncher.launch(trackingPermissions())
         }
     }
 
@@ -80,6 +81,16 @@ fun HomeScreen(state: HomeState, dispatch: (HomeAction) -> Unit) {
         }
     }
 }
+
+private val LOCATION_PERMISSIONS = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+
+/** The tracking service's notification needs its own permission on Android 13+; asked for along with location. */
+private fun trackingPermissions(): Array<String> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        LOCATION_PERMISSIONS + Manifest.permission.POST_NOTIFICATIONS
+    } else {
+        LOCATION_PERMISSIONS
+    }
 
 @Composable
 private fun ProgressCard(state: HomeState, modifier: Modifier = Modifier) {

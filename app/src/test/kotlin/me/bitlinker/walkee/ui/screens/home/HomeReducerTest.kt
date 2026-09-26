@@ -18,10 +18,17 @@ class HomeReducerTest {
     }
 
     @Test
-    fun `toggle with permission leaves state to the use case result`() {
+    fun `starting with permission still goes through the request, for the notification permission`() {
         val state = HomeState(hasLocationPermission = true)
-        assertEquals(state, reduceHome(state, HomeAction.TrackingToggled))
+        assertTrue(reduceHome(state, HomeAction.TrackingToggled).permissionRequestPending)
         assertEquals(state.copy(isTracking = true), reduceHome(state, HomeAction.TrackingChanged(true)))
+    }
+
+    @Test
+    fun `pausing leaves state to the use case result`() {
+        val state = HomeState(hasLocationPermission = true, isTracking = true)
+        assertEquals(state, reduceHome(state, HomeAction.TrackingToggled))
+        assertEquals(state.copy(isTracking = false), reduceHome(state, HomeAction.TrackingChanged(false)))
     }
 
     @Test

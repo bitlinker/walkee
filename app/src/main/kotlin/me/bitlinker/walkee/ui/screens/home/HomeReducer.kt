@@ -7,12 +7,7 @@ fun reduceHome(state: HomeState, action: HomeAction): HomeState = state.copy(
     followUser = reduceFollowUser(state.followUser, action),
     visitedCells = reduceVisitedCells(state.visitedCells, action),
     areaSquareKilometres = reduceAreaSquareKilometres(state.areaSquareKilometres, action),
-    permissionRequestPending = reducePermissionRequestPending(
-        state.permissionRequestPending,
-        action,
-        isTracking = state.isTracking,
-        hasLocationPermission = state.hasLocationPermission,
-    ),
+    permissionRequestPending = reducePermissionRequestPending(state.permissionRequestPending, action, isTracking = state.isTracking),
 )
 
 private fun reduceHasLocationPermission(granted: Boolean, action: HomeAction): Boolean = when (action) {
@@ -41,14 +36,13 @@ private fun reduceAreaSquareKilometres(area: Double, action: HomeAction): Double
     else -> area
 }
 
-/** Starting without permission asks for it instead of toggling; handling the dialog clears the request. */
-private fun reducePermissionRequestPending(
-    pending: Boolean,
-    action: HomeAction,
-    isTracking: Boolean,
-    hasLocationPermission: Boolean,
-): Boolean = when (action) {
-    HomeAction.TrackingToggled -> if (!isTracking && !hasLocationPermission) true else pending
+/**
+ * Every start goes through the permission request (location, and notifications for the tracking
+ * service); the system asks only for what is missing and answers at once when nothing is. Tracking
+ * starts from the result; handling it clears the request.
+ */
+private fun reducePermissionRequestPending(pending: Boolean, action: HomeAction, isTracking: Boolean): Boolean = when (action) {
+    HomeAction.TrackingToggled -> if (!isTracking) true else pending
     HomeAction.PermissionRequestLaunched, is HomeAction.PermissionResult -> false
     else -> pending
 }

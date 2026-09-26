@@ -19,6 +19,9 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import me.bitlinker.walkee.domain.usecase.FlushFogUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveLocationPermissionUseCase
+import me.bitlinker.walkee.domain.usecase.RefreshPermissionsUseCase
+import me.bitlinker.walkee.domain.usecase.ResumeTrackingUseCase
+import me.bitlinker.walkee.domain.usecase.SyncAutoStartUseCase
 import me.bitlinker.walkee.ui.map.MapFogLayerRenderer
 import me.bitlinker.walkee.ui.map.MapRenderer
 import me.bitlinker.walkee.ui.map.MapViewModel
@@ -37,6 +40,9 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var fogLayerRenderer: MapFogLayerRenderer
     @Inject lateinit var observeLocationPermission: ObserveLocationPermissionUseCase
     @Inject lateinit var flushFog: FlushFogUseCase
+    @Inject lateinit var refreshPermissions: RefreshPermissionsUseCase
+    @Inject lateinit var resumeTracking: ResumeTrackingUseCase
+    @Inject lateinit var syncAutoStart: SyncAutoStartUseCase
 
     private val mapViewModel: MapViewModel by viewModels()
 
@@ -79,6 +85,13 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         MapKitFactory.getInstance().onStart()
         mapView.onStart()
+        // Permissions may have changed in system settings meanwhile. Tracking left on comes back
+        // now that the app is in the foreground, where its service may start (ADR 0006).
+        refreshPermissions()
+        lifecycleScope.launch {
+            resumeTracking()
+            syncAutoStart()
+        }
     }
 
     override fun onStop() {

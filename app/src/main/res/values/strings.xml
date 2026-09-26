@@ -30,5 +30,15 @@
     <string name="settings_clear_explored_message">Everything you have revealed will be covered by fog again. This cannot be undone.</string>
     <string name="settings_clear_explored_confirm">Clear</string>
     <string name="settings_clear_explored_failed">Could not clear the explored area. Try again.</string>
+    <string name="settings_auto_start">Start exploring automatically</string>
+    <string name="settings_auto_start_summary">Starts revealing the map when you start walking or running, even if the app is closed.</string>
+    <string name="settings_auto_start_needs_background">Needs location access set to “Allow all the time”.</string>
+    <string name="settings_auto_start_grant">Allow all the time</string>
+    <string name="settings_auto_start_activity_denied">Allow physical activity access so the app notices when you start walking.</string>
     <string name="settings_cancel">Cancel</string>
+
+    <string name="tracking_channel_name">Exploring</string>
+    <string name="tracking_notification_title">Exploring</string>
+    <string name="tracking_notification_text">%1$s km² explored</string>
+    <string name="tracking_notification_pause">Pause</string>
 </resources>

@@ -16,13 +16,15 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The core game loop: while enabled, turns accepted location fixes into revealed fog cells.
- * Lives in the application scope so it keeps running while the user switches screens.
+ * The core game loop: while on, turns accepted location fixes into revealed fog cells.
+ * Lives in the application scope; a foreground service keeps the process alive meanwhile, so it
+ * goes on with the screen off (ADR 0006).
  */
 @Singleton
 class TrackingSession @Inject constructor(
     private val locationRepository: LocationRepository,
     private val mapRepository: MapRepository,
+    private val foreground: TrackingForeground,
     @ApplicationScope private val scope: CoroutineScope,
 ) {
     private val _isTracking = MutableStateFlow(false)
@@ -30,19 +32,33 @@ class TrackingSession @Inject constructor(
 
     private var job: Job? = null
 
+    /**
+     * Starts revealing the map and brings up the foreground service. Returns false, leaving
+     * tracking off, when the system does not allow the service right now.
+     */
     @Synchronized
-    fun setEnabled(enabled: Boolean) {
-        if (enabled == (job != null)) return
-        if (enabled) {
-            job = scope.launch { track() }
-        } else {
-            job?.cancel()
-            job = null
-        }
-        _isTracking.value = enabled
+    fun start(): Boolean {
+        if (job != null) return true
+        // On before the service starts: the service follows isTracking and would stop at once.
+        job = scope.launch { track() }
+        _isTracking.value = true
+        if (foreground.start()) return true
+        stop()
+        return false
+    }
+
+    /** Stops revealing the map; the foreground service follows [isTracking] and stops as well. */
+    @Synchronized
+    fun stop() {
+        job?.cancel()
+        job = null
+        _isTracking.value = false
     }
 
     private suspend fun track() {
+        // A process started in the background (auto-start) may get here before AppInitializer has
+        // loaded the fog, and loading replaces whatever was painted before it.
+        mapRepository.load()
         var previous: LocationFix? = null
         locationRepository.fixes.collect { fix ->
             val radius = brushRadiusMetres(fix)

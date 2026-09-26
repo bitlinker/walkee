@@ -7,7 +7,7 @@ import me.bitlinker.walkee.domain.usecase.ObserveExplorationProgressUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFollowUserUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveLocationPermissionUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveTrackingUseCase
-import me.bitlinker.walkee.domain.usecase.RefreshLocationPermissionUseCase
+import me.bitlinker.walkee.domain.usecase.RefreshPermissionsUseCase
 import me.bitlinker.walkee.domain.usecase.SetFollowUserUseCase
 import me.bitlinker.walkee.domain.usecase.SetTrackingEnabledUseCase
 import me.bitlinker.walkee.ui.navigation.Router
@@ -21,7 +21,7 @@ class HomeViewModel @Inject constructor(
     observeTracking: ObserveTrackingUseCase,
     observeFollowUser: ObserveFollowUserUseCase,
     observeExplorationProgress: ObserveExplorationProgressUseCase,
-    private val refreshLocationPermission: RefreshLocationPermissionUseCase,
+    private val refreshPermissions: RefreshPermissionsUseCase,
     private val setTrackingEnabled: SetTrackingEnabledUseCase,
     private val setFollowUser: SetFollowUserUseCase,
     private val router: Router,
@@ -46,12 +46,13 @@ class HomeViewModel @Inject constructor(
 
     override fun onAction(action: HomeAction, state: HomeState) {
         when (action) {
-            HomeAction.TrackingToggled -> if (!state.permissionRequestPending) {
-                viewModelScope.launch { setTrackingEnabled(!state.isTracking) }
+            // Starting waits for the permission result; pausing needs no permission.
+            HomeAction.TrackingToggled -> if (state.isTracking) {
+                viewModelScope.launch { setTrackingEnabled(false) }
             }
 
             is HomeAction.PermissionResult -> {
-                refreshLocationPermission()
+                refreshPermissions()
                 if (action.granted) viewModelScope.launch { setTrackingEnabled(true) }
             }
 

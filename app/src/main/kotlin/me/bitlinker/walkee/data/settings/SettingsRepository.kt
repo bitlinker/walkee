@@ -74,6 +74,8 @@ data class FogStyle(
 data class AppSettings(
     val fogStyle: FogStyle = FogStyle(),
     val trackingEnabled: Boolean = false,
+    /** Start tracking when activity recognition sees the user set off on foot (ADR 0006). */
+    val autoStartEnabled: Boolean = false,
 )
 
 /** Key-value settings in DataStore (ADR 0004). */
@@ -93,6 +95,7 @@ class SettingsRepository @Inject constructor(
                     edges = FogEdges.entries.firstOrNull { it.name == preferences[FOG_EDGES] } ?: FogStyle.DEFAULT_EDGES,
                 ),
                 trackingEnabled = preferences[TRACKING_ENABLED] ?: false,
+                autoStartEnabled = preferences[AUTO_START_ENABLED] ?: false,
             )
         }
         .distinctUntilChanged()
@@ -119,11 +122,16 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[TRACKING_ENABLED] = enabled }
     }
 
+    suspend fun setAutoStartEnabled(enabled: Boolean) {
+        dataStore.edit { it[AUTO_START_ENABLED] = enabled }
+    }
+
     private companion object {
         val FOG_OPACITY = floatPreferencesKey("fog_opacity")
         val DISPLAY_ZOOM = intPreferencesKey("fog_display_zoom")
         val CELL_SHAPE = stringPreferencesKey("fog_cell_shape")
         val FOG_EDGES = stringPreferencesKey("fog_edges")
         val TRACKING_ENABLED = booleanPreferencesKey("tracking_enabled")
+        val AUTO_START_ENABLED = booleanPreferencesKey("auto_start_enabled")
     }
 }

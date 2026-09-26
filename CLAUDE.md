@@ -23,6 +23,9 @@ Android city-exploration game: Yandex MapKit map with a fog of war revealed by w
 - Data: `MapStorage` (fog-core) ← `MapRepository`; `LocationRepository`; `SettingsRepository`
   (DataStore). Room only when a real need appears.
 - Map code: `ui/map/MapRenderer` (camera, layers, placemarks) and `MapFogLayerRenderer` (tiles).
+- Tracking runs in a foreground service (`tracking/TrackingService`, type `location`) built like a
+  screen: `TrackingServiceController : ReduxController` + State/Action/Reducer, rendered by
+  `TrackingNotification`. Auto-start on walking/running via Activity Recognition (ADR 0006).
 - Tests: JUnit 5 + coroutines-test + Turbine; keep algorithmic code in `:fog-core` or in pure
   classes so it is testable on the JVM.
 - Docs in Russian; code, comments, identifiers and commit messages in English.

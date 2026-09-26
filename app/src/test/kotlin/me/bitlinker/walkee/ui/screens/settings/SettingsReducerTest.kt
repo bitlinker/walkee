@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.ui.screens.settings
 
+import me.bitlinker.walkee.data.location.LocationPermissions
 import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
@@ -74,5 +75,71 @@ class SettingsReducerTest {
         assertEquals(FogCellShape.HEXAGONS, state.cellShape)
         assertEquals(17, state.displayZoom)
         assertTrue(state.isLoaded)
+    }
+
+    private val allPermissions = LocationPermissions(location = true, backgroundLocation = true, activityRecognition = true)
+
+    private fun withPermissions(permissions: LocationPermissions) =
+        reduceSettings(loaded, SettingsAction.PermissionsChanged(permissions))
+
+    @Test
+    fun `auto-start turns on and off with every permission in place`() {
+        val on = reduceSettings(withPermissions(allPermissions), SettingsAction.AutoStartToggled(true))
+        assertTrue(on.autoStartEnabled)
+        assertTrue(on.isAutoStartOn)
+        assertFalse(on.activityRequestPending)
+
+        val off = reduceSettings(on, SettingsAction.AutoStartToggled(false))
+        assertFalse(off.autoStartEnabled)
+        assertFalse(off.isAutoStartOn)
+    }
+
+    @Test
+    fun `auto-start asks for the activity permission first`() {
+        val noActivity = withPermissions(allPermissions.copy(activityRecognition = false))
+        val asked = reduceSettings(noActivity, SettingsAction.AutoStartToggled(true))
+        assertFalse(asked.autoStartEnabled)
+        assertTrue(asked.activityRequestPending)
+
+        val launched = reduceSettings(asked, SettingsAction.ActivityRequestLaunched)
+        assertFalse(launched.activityRequestPending)
+
+        val granted = reduceSettings(launched, SettingsAction.ActivityPermissionResult(granted = true))
+        assertTrue(granted.autoStartEnabled)
+        assertFalse(granted.activityPermissionDenied)
+    }
+
+    @Test
+    fun `a refused activity permission keeps auto-start off and is explained until granted`() {
+        val noActivity = withPermissions(allPermissions.copy(activityRecognition = false))
+        val asked = reduceSettings(noActivity, SettingsAction.AutoStartToggled(true))
+        val denied = reduceSettings(asked, SettingsAction.ActivityPermissionResult(granted = false))
+        assertFalse(denied.autoStartEnabled)
+        assertTrue(denied.activityPermissionDenied)
+
+        assertFalse(reduceSettings(denied, SettingsAction.PermissionsChanged(allPermissions)).activityPermissionDenied)
+    }
+
+    @Test
+    fun `auto-start needs location all the time`() {
+        val whileInUse = withPermissions(allPermissions.copy(backgroundLocation = false))
+        assertFalse(whileInUse.isAutoStartAvailable)
+
+        val toggled = reduceSettings(whileInUse, SettingsAction.AutoStartToggled(true))
+        assertFalse(toggled.autoStartEnabled)
+        assertFalse(toggled.activityRequestPending)
+
+        // A stored choice stays, but shows as off until the permission is back.
+        val stored = reduceSettings(whileInUse, SettingsAction.AutoStartLoaded(true))
+        assertTrue(stored.autoStartEnabled)
+        assertFalse(stored.isAutoStartOn)
+        assertTrue(reduceSettings(stored, SettingsAction.PermissionsChanged(allPermissions)).isAutoStartOn)
+    }
+
+    @Test
+    fun `the background location button requests once`() {
+        val clicked = reduceSettings(loaded, SettingsAction.BackgroundLocationClicked)
+        assertTrue(clicked.locationRequestPending)
+        assertFalse(reduceSettings(clicked, SettingsAction.LocationRequestLaunched).locationRequestPending)
     }
 }

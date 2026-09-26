@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.ui.screens.settings
 
+import me.bitlinker.walkee.data.location.LocationPermissions
 import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
@@ -16,7 +17,20 @@ data class SettingsState(
     val isClearConfirmationShown: Boolean = false,
     val isClearing: Boolean = false,
     val clearFailed: Boolean = false,
+    /** The stored choice; it takes effect only with the permissions below (see [isAutoStartOn]). */
+    val autoStartEnabled: Boolean = false,
+    val permissions: LocationPermissions = LocationPermissions(),
+    /** Set by the "allow all the time" button; cleared once the system request is launched. */
+    val locationRequestPending: Boolean = false,
+    /** Set when turning auto-start on needs the activity permission first. */
+    val activityRequestPending: Boolean = false,
+    val activityPermissionDenied: Boolean = false,
 ) {
+    /** Auto-start can be turned on only with location "all the time" (ADR 0006). */
+    val isAutoStartAvailable: Boolean get() = permissions.backgroundLocation
+
+    val isAutoStartOn: Boolean get() = autoStartEnabled && permissions.backgroundLocation && permissions.activityRecognition
+
     /** Approximate side of one displayed pixel at the reference latitude, metres; derived from [displayZoom]. */
     val displayCellMetres: Int get() = Epsg3395.tileSizeMetres(REFERENCE_LATITUDE, displayZoom).roundToInt()
 

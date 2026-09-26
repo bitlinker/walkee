@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.google.android.gms.location.ActivityRecognition
+import com.google.android.gms.location.ActivityRecognitionClient
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import dagger.Module
@@ -43,6 +45,11 @@ object DataModule {
     @Singleton
     fun fusedLocationProviderClient(@ApplicationContext context: Context): FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
+
+    @Provides
+    @Singleton
+    fun activityRecognitionClient(@ApplicationContext context: Context): ActivityRecognitionClient =
+        ActivityRecognition.getClient(context)
 
     private const val FOG_DIRECTORY = "fog"
     private const val SETTINGS_STORE = "settings"

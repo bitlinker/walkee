@@ -14,5 +14,6 @@ Walkee — Android-игра для исследования города: кар
 | [0003](0003-fog-rendering.md) | Рендер тумана через тайловый API MapKit (`addTileLayer`, PNG-тайлы, `DataSourceLayer.clear()`) | Accepted |
 | [0004](0004-tech-stack.md) | Технологический стек и требования к коду | Accepted |
 | [0005](0005-app-architecture.md) | Архитектура приложения: слои, redux-экраны, use case'ы, репозитории, рендереры | Accepted |
+| [0006](0006-background-tracking.md) | Фоновый трекинг: foreground-сервис на время трекинга, автозапуск по ходьбе через Activity Recognition | Accepted |
 
 Соглашение: документация — на русском, код, комментарии и идентификаторы — на английском.

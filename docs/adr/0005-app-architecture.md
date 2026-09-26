@@ -59,6 +59,23 @@ private fun reduceHasLocationPermission(granted: Boolean, action: HomeAction): B
 - Производные значения (полностью вычисляемые из других полей) в `State` не хранятся — это
   свойства `State` (`SettingsState.displayCellMetres` из `displayZoom`).
 
+## Сервис трекинга
+
+Foreground-сервис (ADR 0006) устроен так же, как экран. `TrackingService` — тонкий хост, как
+`MainActivity`. Состояние, экшены и редьюсер (`TrackingServiceState`, `TrackingServiceAction`,
+`reduceTrackingService`, по полям) — как у экрана. `TrackingServiceController` — аналог view
+model: наружу только `state` и `dispatch`, с данными — только через use case'ы.
+`TrackingNotification` — stateless-рендер состояния в уведомление, аналог `Screen`.
+
+Контроллер наследует `ReduxController` — тот же контракт, что `ReduxViewModel`, но без
+`ViewModel`. Его `scope` живёт, пока хост не вызовет `clear()` в `onDestroy`.
+
+Broadcast-ресиверы (`ActivityTransitionReceiver`, `AutoStartRestoreReceiver`) — тоже точки входа
+верхнего уровня: они только вызывают use case'ы.
+
+Домен поднимает сервис через порт `TrackingForeground` (интерфейс в `domain`, реализация в
+`tracking/`, связка в `di/TrackingModule`), так что стрелки зависимостей по-прежнему идут вниз.
+
 ## Навигация
 
 - `Router` — singleton в DI; хранит стек `StateFlow<List<NavKey>>`, методы `push/pop/replace`.
@@ -90,10 +107,12 @@ private fun reduceHasLocationPermission(granted: Boolean, action: HomeAction): B
 
 :app        me.bitlinker.walkee/
   WalkeeApp.kt, MainActivity.kt
+  tracking/              TrackingService (+ Controller/State/Action/Reducer/Notification), ресиверы
+                         activity transitions и BOOT_COMPLETED (ADR 0006)
   di/                    Hilt/Dagger modules
   domain/usecase/        use case'ы (по одному классу на операцию)
   data/map/              MapRepository
-  data/location/         LocationRepository (Fused Location Provider)
+  data/location/         LocationRepository (Fused Location Provider, Activity Recognition)
   data/settings/         SettingsRepository (DataStore)
   ui/navigation/         Router, NavKeys, MainNavDisplay
   ui/screens/<screen>/   пакет на экран: <Screen>Screen.kt, <Screen>State.kt,

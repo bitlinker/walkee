@@ -28,5 +28,15 @@
     <string name="settings_clear_explored_message">Всё, что вы открыли, снова скроется под туманом. Отменить это нельзя.</string>
     <string name="settings_clear_explored_confirm">Очистить</string>
     <string name="settings_clear_explored_failed">Не удалось очистить исследованное. Попробуйте ещё раз.</string>
+    <string name="settings_auto_start">Начинать исследование автоматически</string>
+    <string name="settings_auto_start_summary">Карта начнёт открываться, как только вы пойдёте или побежите, даже если приложение закрыто.</string>
+    <string name="settings_auto_start_needs_background">Нужен доступ к геолокации «Разрешить в любом режиме».</string>
+    <string name="settings_auto_start_grant">Разрешить в любом режиме</string>
+    <string name="settings_auto_start_activity_denied">Разрешите доступ к физической активности, чтобы приложение замечало начало прогулки.</string>
     <string name="settings_cancel">Отмена</string>
+
+    <string name="tracking_channel_name">Исследование</string>
+    <string name="tracking_notification_title">Идёт исследование</string>
+    <string name="tracking_notification_text">Исследовано %1$s км²</string>
+    <string name="tracking_notification_pause">Пауза</string>
 </resources>

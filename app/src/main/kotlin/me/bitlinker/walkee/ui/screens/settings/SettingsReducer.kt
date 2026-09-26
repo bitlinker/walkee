@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.ui.screens.settings
 
+import me.bitlinker.walkee.data.location.LocationPermissions
 import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
@@ -14,6 +15,11 @@ fun reduceSettings(state: SettingsState, action: SettingsAction): SettingsState 
     isClearConfirmationShown = reduceIsClearConfirmationShown(state.isClearConfirmationShown, action),
     isClearing = reduceIsClearing(state.isClearing, action),
     clearFailed = reduceClearFailed(state.clearFailed, action),
+    autoStartEnabled = reduceAutoStartEnabled(state.autoStartEnabled, action, permissions = state.permissions),
+    permissions = reducePermissions(state.permissions, action),
+    locationRequestPending = reduceLocationRequestPending(state.locationRequestPending, action),
+    activityRequestPending = reduceActivityRequestPending(state.activityRequestPending, action, permissions = state.permissions),
+    activityPermissionDenied = reduceActivityPermissionDenied(state.activityPermissionDenied, action),
 )
 
 private fun reduceFogOpacity(opacity: Float, action: SettingsAction): Float = when (action) {
@@ -64,4 +70,39 @@ private fun reduceClearFailed(failed: Boolean, action: SettingsAction): Boolean 
     SettingsAction.ClearExploredClicked -> false
     is SettingsAction.ClearExploredFinished -> !action.success
     else -> failed
+}
+
+/**
+ * Turning on needs location "all the time" and the activity permission; without the latter the
+ * switch asks for it first and turns on once it is granted.
+ */
+private fun reduceAutoStartEnabled(enabled: Boolean, action: SettingsAction, permissions: LocationPermissions): Boolean = when (action) {
+    is SettingsAction.AutoStartToggled -> action.enabled && permissions.backgroundLocation && permissions.activityRecognition
+    is SettingsAction.ActivityPermissionResult -> if (action.granted && permissions.backgroundLocation) true else enabled
+    is SettingsAction.AutoStartLoaded -> action.enabled
+    else -> enabled
+}
+
+private fun reducePermissions(permissions: LocationPermissions, action: SettingsAction): LocationPermissions = when (action) {
+    is SettingsAction.PermissionsChanged -> action.permissions
+    else -> permissions
+}
+
+private fun reduceLocationRequestPending(pending: Boolean, action: SettingsAction): Boolean = when (action) {
+    SettingsAction.BackgroundLocationClicked -> true
+    SettingsAction.LocationRequestLaunched, SettingsAction.LocationPermissionResult -> false
+    else -> pending
+}
+
+private fun reduceActivityRequestPending(pending: Boolean, action: SettingsAction, permissions: LocationPermissions): Boolean = when (action) {
+    is SettingsAction.AutoStartToggled -> action.enabled && permissions.backgroundLocation && !permissions.activityRecognition
+    SettingsAction.ActivityRequestLaunched, is SettingsAction.ActivityPermissionResult -> false
+    else -> pending
+}
+
+/** A refusal is explained until the permission shows up. */
+private fun reduceActivityPermissionDenied(denied: Boolean, action: SettingsAction): Boolean = when (action) {
+    is SettingsAction.ActivityPermissionResult -> !action.granted
+    is SettingsAction.PermissionsChanged -> if (action.permissions.activityRecognition) false else denied
+    else -> denied
 }
