@@ -14,7 +14,9 @@ Android city-exploration game: Yandex MapKit map with a fog of war revealed by w
   Navigation 3 via `Router` → `MainNavDisplay`.
 - Coroutines/Flow everywhere; wrap platform callbacks at the boundary (`callbackFlow`).
 - DI: Hilt. Every screen: own package under `ui/screens/<name>/` with `State`, `Action`,
-  `Reducer` (pure `reduce(state, action)`), `ViewModel : ReduxViewModel` exposing only
+  `Reducer` (pure `reduce(state, action)`, split **per field, not per action**: it only
+  assembles `state.copy(field = reduceField(state.field, action), …)`; see ADR 0005),
+  `ViewModel : ReduxViewModel` exposing only
   `state` + `dispatch`, and a stateless `Screen(state, dispatch)` composable.
 - Navigation and side effects happen in `ViewModel.onAction`, results come back as actions.
 - ViewModels and renderers talk to data only through use cases in `domain/usecase/`.

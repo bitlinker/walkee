@@ -12,19 +12,6 @@ import me.bitlinker.walkee.domain.usecase.SetFollowUserUseCase
 import me.bitlinker.walkee.ui.redux.ReduxViewModel
 import javax.inject.Inject
 
-fun reduceMap(state: MapState, action: MapAction): MapState = when (action) {
-    is MapAction.LocationChanged -> state.copy(userLocation = action.point)
-    is MapAction.FollowUserChanged -> state.copy(
-        followUser = action.followUser,
-        recenterRequests = if (action.followUser && !state.followUser) state.recenterRequests + 1 else state.recenterRequests,
-    )
-    is MapAction.FogStyleChanged -> state.copy(fogStyle = action.style)
-    is MapAction.ZoomRequested -> state.copy(
-        zoomRequest = MapState.ZoomRequest(action.zoom, (state.zoomRequest?.sequence ?: 0) + 1),
-    )
-    MapAction.CameraMovedByUser -> state
-}
-
 /** Activity-scoped state for the map beneath the screens (ADR 0005). */
 @HiltViewModel
 class MapViewModel @Inject constructor(

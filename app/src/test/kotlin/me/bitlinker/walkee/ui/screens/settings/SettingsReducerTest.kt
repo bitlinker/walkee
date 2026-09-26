@@ -63,6 +63,12 @@ class SettingsReducerTest {
     }
 
     @Test
+    fun `cell size in metres follows the display zoom`() {
+        assertEquals(22, loaded.displayCellMetres)
+        assertEquals(86, reduceSettings(loaded, SettingsAction.DisplayZoomChanged(18)).displayCellMetres)
+    }
+
+    @Test
     fun `loaded style carries the shape`() {
         val state = reduceSettings(SettingsState(), SettingsAction.StyleLoaded(FogStyle(displayZoom = 17, cellShape = FogCellShape.HEXAGONS)))
         assertEquals(FogCellShape.HEXAGONS, state.cellShape)

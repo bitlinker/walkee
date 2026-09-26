@@ -24,11 +24,40 @@
 
 - `XxxState` — иммутабельный data class;
 - `XxxAction` — sealed interface всех событий экрана (включая навигационные намерения);
-- `reduce(state, action): XxxState` — чистая функция;
+- `reduce(state, action): XxxState` — чистая функция, разбитая **по полям** (см. ниже);
 - `XxxViewModel` — держит `MutableStateFlow<XxxState>`, наружу отдаёт `state: StateFlow` и
   `dispatch(action)`. Побочные эффекты (вызовы use case'ов, навигация через `Router`)
   выполняются в `ViewModel` в ответ на `Action` и приводят к новым `Action`'ам с результатом;
 - `XxxScreen(state, dispatch)` — composable без собственной логики.
+
+### Редьюсер: по полям, а не по экшенам (2026-09-26)
+
+Обязательно для всех редьюсеров, включая `reduceMap`. Редьюсер не разбирает экшены — он
+собирает новое состояние из редьюсеров полей:
+
+```kotlin
+fun reduceHome(state: HomeState, action: HomeAction): HomeState = state.copy(
+    hasLocationPermission = reduceHasLocationPermission(state.hasLocationPermission, action),
+    permissionRequestPending = reducePermissionRequestPending(state.permissionRequestPending, action, ...),
+)
+
+private fun reduceHasLocationPermission(granted: Boolean, action: HomeAction): Boolean = when (action) {
+    is HomeAction.PermissionResult -> action.granted
+    is HomeAction.PermissionChanged -> action.granted
+    else -> granted
+}
+```
+
+- На каждое поле `State` — своя чистая функция `reduceПоле(значение, action)`, в `when` которой
+  перечислены **все** экшены, меняющие это поле; остальные — `else -> значение`. Всё, что может
+  изменить поле, видно в одном месте.
+- Запрещено `when (action)` на верхнем уровне с `state.copy(a = …, b = …)` в ветках: один экшен,
+  меняющий несколько полей, размазывает логику каждого поля по веткам.
+- Если новое значение поля зависит от других полей, они передаются в его редьюсер отдельными
+  параметрами из **прежнего** состояния (`reduceDisplayZoom(zoom, action, cellShape = state.cellShape)`),
+  а не из частично собранного нового.
+- Производные значения (полностью вычисляемые из других полей) в `State` не хранятся — это
+  свойства `State` (`SettingsState.displayCellMetres` из `displayZoom`).
 
 ## Навигация
 
@@ -69,6 +98,6 @@
   ui/navigation/         Router, NavKeys, MainNavDisplay
   ui/screens/<screen>/   пакет на экран: <Screen>Screen.kt, <Screen>State.kt,
                          <Screen>Action.kt, <Screen>Reducer.kt, <Screen>ViewModel.kt
-  ui/map/                MapViewModel, MapState, MapAction, MapRenderer, MapFogLayerRenderer
+  ui/map/                MapViewModel, MapState, MapAction, MapReducer, MapRenderer, MapFogLayerRenderer
   ui/theme/              Material 3, жёлтый акцент
 ```

@@ -1,45 +1,67 @@
 package me.bitlinker.walkee.ui.screens.settings
 
+import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
-import me.bitlinker.walkee.fog.geo.Epsg3395
-import kotlin.math.roundToInt
 
-fun reduceSettings(state: SettingsState, action: SettingsAction): SettingsState = when (action) {
-    is SettingsAction.FogOpacityChanged -> state.copy(fogOpacity = action.opacity.coerceIn(FogStyle.OPACITY_RANGE))
+/** Builds the next state field by field; each field has its own reducer (ADR 0005). */
+fun reduceSettings(state: SettingsState, action: SettingsAction): SettingsState = state.copy(
+    fogOpacity = reduceFogOpacity(state.fogOpacity, action),
+    displayZoom = reduceDisplayZoom(state.displayZoom, action, cellShape = state.cellShape),
+    cellShape = reduceCellShape(state.cellShape, action),
+    fogEdges = reduceFogEdges(state.fogEdges, action),
+    isLoaded = reduceIsLoaded(state.isLoaded, action),
+    isClearConfirmationShown = reduceIsClearConfirmationShown(state.isClearConfirmationShown, action),
+    isClearing = reduceIsClearing(state.isClearing, action),
+    clearFailed = reduceClearFailed(state.clearFailed, action),
+)
 
-    is SettingsAction.DisplayZoomChanged -> {
-        val zoom = action.zoom.coerceIn(state.cellShape.displayZoomRange)
-        state.copy(displayZoom = zoom, displayCellMetres = displayCellMetres(zoom))
-    }
-
-    is SettingsAction.CellShapeChanged -> {
-        val zoom = state.displayZoom.coerceIn(action.shape.displayZoomRange)
-        state.copy(cellShape = action.shape, displayZoom = zoom, displayCellMetres = displayCellMetres(zoom))
-    }
-
-    is SettingsAction.FogEdgesChanged -> state.copy(fogEdges = action.edges)
-
-    is SettingsAction.StyleLoaded -> state.copy(
-        fogOpacity = action.style.opacity,
-        displayZoom = action.style.displayZoom,
-        displayCellMetres = displayCellMetres(action.style.displayZoom),
-        cellShape = action.style.cellShape,
-        fogEdges = action.style.edges,
-        isLoaded = true,
-    )
-
-    SettingsAction.ClearExploredClicked -> state.copy(isClearConfirmationShown = true, clearFailed = false)
-
-    SettingsAction.ClearExploredDismissed -> state.copy(isClearConfirmationShown = false)
-
-    SettingsAction.ClearExploredConfirmed -> state.copy(isClearConfirmationShown = false, isClearing = true)
-
-    is SettingsAction.ClearExploredFinished -> state.copy(isClearing = false, clearFailed = !action.success)
-
-    SettingsAction.BackClicked -> state
+private fun reduceFogOpacity(opacity: Float, action: SettingsAction): Float = when (action) {
+    is SettingsAction.FogOpacityChanged -> action.opacity.coerceIn(FogStyle.OPACITY_RANGE)
+    is SettingsAction.StyleLoaded -> action.style.opacity
+    else -> opacity
 }
 
-/** Moscow latitude as the reference for the human-readable cell size (a hexagon is as wide as a square). */
-private const val REFERENCE_LATITUDE = 55.75
+/** Always within the range of the shape: the chosen zoom is limited by it, a new shape pulls the zoom in. */
+private fun reduceDisplayZoom(zoom: Int, action: SettingsAction, cellShape: FogCellShape): Int = when (action) {
+    is SettingsAction.DisplayZoomChanged -> action.zoom.coerceIn(cellShape.displayZoomRange)
+    is SettingsAction.CellShapeChanged -> zoom.coerceIn(action.shape.displayZoomRange)
+    is SettingsAction.StyleLoaded -> action.style.displayZoom
+    else -> zoom
+}
 
-private fun displayCellMetres(zoom: Int): Int = Epsg3395.tileSizeMetres(REFERENCE_LATITUDE, zoom).roundToInt()
+private fun reduceCellShape(shape: FogCellShape, action: SettingsAction): FogCellShape = when (action) {
+    is SettingsAction.CellShapeChanged -> action.shape
+    is SettingsAction.StyleLoaded -> action.style.cellShape
+    else -> shape
+}
+
+private fun reduceFogEdges(edges: FogEdges, action: SettingsAction): FogEdges = when (action) {
+    is SettingsAction.FogEdgesChanged -> action.edges
+    is SettingsAction.StyleLoaded -> action.style.edges
+    else -> edges
+}
+
+private fun reduceIsLoaded(isLoaded: Boolean, action: SettingsAction): Boolean = when (action) {
+    is SettingsAction.StyleLoaded -> true
+    else -> isLoaded
+}
+
+private fun reduceIsClearConfirmationShown(shown: Boolean, action: SettingsAction): Boolean = when (action) {
+    SettingsAction.ClearExploredClicked -> true
+    SettingsAction.ClearExploredDismissed, SettingsAction.ClearExploredConfirmed -> false
+    else -> shown
+}
+
+private fun reduceIsClearing(isClearing: Boolean, action: SettingsAction): Boolean = when (action) {
+    SettingsAction.ClearExploredConfirmed -> true
+    is SettingsAction.ClearExploredFinished -> false
+    else -> isClearing
+}
+
+/** A failure stays on screen until the next attempt. */
+private fun reduceClearFailed(failed: Boolean, action: SettingsAction): Boolean = when (action) {
+    SettingsAction.ClearExploredClicked -> false
+    is SettingsAction.ClearExploredFinished -> !action.success
+    else -> failed
+}
