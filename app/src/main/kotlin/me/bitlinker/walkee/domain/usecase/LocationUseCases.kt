@@ -63,3 +63,15 @@ class SetFollowUserUseCase @Inject constructor(
 ) {
     operator fun invoke(follow: Boolean) = mapSessionRepository.setFollowUser(follow)
 }
+
+class ObserveCameraZoomRequestsUseCase @Inject constructor(
+    private val mapSessionRepository: MapSessionRepository,
+) {
+    operator fun invoke(): Flow<Float> = mapSessionRepository.zoomRequests
+}
+
+class RequestCameraZoomUseCase @Inject constructor(
+    private val mapSessionRepository: MapSessionRepository,
+) {
+    operator fun invoke(zoom: Float) = mapSessionRepository.requestZoom(zoom)
+}

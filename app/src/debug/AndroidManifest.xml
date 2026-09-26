@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Debug builds only: lets adb drive a fake GPS route through the app (see debug/MockRouteReceiver). -->
+    <uses-permission
+        android:name="android.permission.ACCESS_MOCK_LOCATION"
+        tools:ignore="MockLocation,ProtectedPermissions" />
+
+    <application>
+        <receiver
+            android:name=".debug.MockRouteReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="me.bitlinker.walkee.debug.MOCK_ROUTE_START" />
+                <action android:name="me.bitlinker.walkee.debug.MOCK_ROUTE_STOP" />
+                <action android:name="me.bitlinker.walkee.debug.CAMERA_ZOOM" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

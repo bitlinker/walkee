@@ -11,4 +11,5 @@ sealed interface MapAction {
     data class LocationChanged(val point: GeoPoint) : MapAction
     data class FollowUserChanged(val followUser: Boolean) : MapAction
     data class FogStyleChanged(val style: FogStyle) : MapAction
+    data class ZoomRequested(val zoom: Float) : MapAction
 }

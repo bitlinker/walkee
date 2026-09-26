@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import me.bitlinker.walkee.domain.usecase.GetLastKnownLocationUseCase
+import me.bitlinker.walkee.domain.usecase.ObserveCameraZoomRequestsUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogStyleUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFollowUserUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveLocationUseCase
@@ -18,6 +19,9 @@ fun reduceMap(state: MapState, action: MapAction): MapState = when (action) {
         recenterRequests = if (action.followUser && !state.followUser) state.recenterRequests + 1 else state.recenterRequests,
     )
     is MapAction.FogStyleChanged -> state.copy(fogStyle = action.style)
+    is MapAction.ZoomRequested -> state.copy(
+        zoomRequest = MapState.ZoomRequest(action.zoom, (state.zoomRequest?.sequence ?: 0) + 1),
+    )
     MapAction.CameraMovedByUser -> state
 }
 
@@ -27,6 +31,7 @@ class MapViewModel @Inject constructor(
     observeLocation: ObserveLocationUseCase,
     observeFollowUser: ObserveFollowUserUseCase,
     observeFogStyle: ObserveFogStyleUseCase,
+    observeCameraZoomRequests: ObserveCameraZoomRequestsUseCase,
     getLastKnownLocation: GetLastKnownLocationUseCase,
     private val setFollowUser: SetFollowUserUseCase,
 ) : ReduxViewModel<MapState, MapAction>(MapState(), ::reduceMap) {
@@ -43,6 +48,9 @@ class MapViewModel @Inject constructor(
         }
         viewModelScope.launch {
             observeFogStyle().collect { dispatch(MapAction.FogStyleChanged(it)) }
+        }
+        viewModelScope.launch {
+            observeCameraZoomRequests().collect { dispatch(MapAction.ZoomRequested(it)) }
         }
     }
 

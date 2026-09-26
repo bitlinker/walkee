@@ -1,7 +1,11 @@
 package me.bitlinker.walkee.data.map
 
+import me.bitlinker.walkee.fog.geo.Epsg3395
 import me.bitlinker.walkee.fog.geo.FogGrid
 import me.bitlinker.walkee.fog.geo.GeoPoint
+import me.bitlinker.walkee.fog.geo.TileKey
+import me.bitlinker.walkee.fog.geo.WorldPoint
+import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -48,6 +52,47 @@ class FogBrushTest {
             assertTrue(stroke.any { it.x == x && it.y == start.y }, "gap at column $x")
         }
         assertTrue(stroke.size > FogBrush.diskCells(from, radius).size * 2)
+    }
+
+    @Test
+    fun `strokes are 4-connected at storage and display zoom`() {
+        val random = Random(2024)
+        repeat(300) {
+            val from = GeoPoint(moscow.latitude + random.nextDouble(-0.002, 0.002), moscow.longitude + random.nextDouble(-0.004, 0.004))
+            val to = GeoPoint(from.latitude + random.nextDouble(-0.0015, 0.0015), from.longitude + random.nextDouble(-0.003, 0.003))
+            val radius = listOf(0.0, 5.0, 12.0, 20.0, 35.0)[random.nextInt(5)]
+            val cells = FogBrush.strokeCells(from, to, radius).toSet()
+            assertTrue(cells.contains(FogGrid.cellAt(from)) && cells.contains(FogGrid.cellAt(to)))
+            assertTrue(isFourConnected(cells), "storage cells not 4-connected: $from -> $to r=$radius")
+            assertTrue(isFourConnected(cells.map { it.ancestor(18) }.toSet()), "display cells not 4-connected: $from -> $to r=$radius")
+        }
+    }
+
+    @Test
+    fun `exact diagonal through cell corners never leaves corner-only contacts`() {
+        // Corners of z20 cells: pick a cell corner in world units and go diagonally to another corner.
+        val origin = FogGrid.tileOrigin(FogGrid.cellAt(moscow))
+        val side = 1.0 / (1 shl FogGrid.STORAGE_ZOOM)
+        val from = Epsg3395.toGeo(WorldPoint(origin.x + 1e-12, origin.y + 1e-12))
+        val to = Epsg3395.toGeo(WorldPoint(origin.x + 7 * side + 1e-12, origin.y + 7 * side + 1e-12))
+        val cells = FogBrush.strokeCells(from, to, 0.0).toSet()
+        assertTrue(isFourConnected(cells))
+        assertTrue(cells.size >= 15, "diagonal of 8 cells needs ≥ 15 cells to be 4-connected, got ${cells.size}")
+    }
+
+    private fun isFourConnected(cells: Set<TileKey>): Boolean {
+        if (cells.isEmpty()) return true
+        val seen = HashSet<TileKey>()
+        val queue = ArrayDeque<TileKey>().apply { add(cells.first()) }
+        seen += cells.first()
+        while (queue.isNotEmpty()) {
+            val c = queue.removeFirst()
+            for ((dx, dy) in listOf(1 to 0, -1 to 0, 0 to 1, 0 to -1)) {
+                val n = TileKey.of(c.zoom, c.x + dx, c.y + dy)
+                if (n in cells && seen.add(n)) queue += n
+            }
+        }
+        return seen.size == cells.size
     }
 
     @Test

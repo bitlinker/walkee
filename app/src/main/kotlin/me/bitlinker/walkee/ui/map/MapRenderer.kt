@@ -51,6 +51,16 @@ class MapRenderer(
                 if (requests > 0 && location != null) moveCamera(location, animated = true)
             }
         }
+        scope.launch {
+            state.map { it.zoomRequest }.distinctUntilChanged().collect { request ->
+                if (request != null) setZoom(request.zoom)
+            }
+        }
+    }
+
+    private fun setZoom(zoom: Float) {
+        val current = map.cameraPosition
+        map.move(CameraPosition(current.target, zoom, current.azimuth, current.tilt), Animation(Animation.Type.SMOOTH, ANIMATION_SECONDS), null)
     }
 
     /** Call when location permission is available: shows MapKit's own user marker. */

@@ -10,4 +10,8 @@ data class MapState(
     val fogStyle: FogStyle = FogStyle(),
     /** Incremented whenever the camera should jump to the user even if it already follows. */
     val recenterRequests: Int = 0,
-)
+    /** Latest explicit zoom request; `sequence` makes repeated identical zooms distinguishable. */
+    val zoomRequest: ZoomRequest? = null,
+) {
+    data class ZoomRequest(val zoom: Float, val sequence: Int)
+}
