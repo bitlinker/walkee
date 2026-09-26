@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_progress_title">Исследовано</string>
+    <string name="home_progress_cells">%1$s клеток</string>
+    <string name="home_progress_area">%1$s км²</string>
+    <string name="home_tracking_start">Начать исследование</string>
+    <string name="home_tracking_stop">Пауза</string>
+    <string name="home_permission_needed">Чтобы открывать карту во время прогулок, нужен доступ к геолокации.</string>
+    <string name="home_permission_grant">Разрешить геолокацию</string>
+    <string name="home_recenter">Показать меня</string>
+    <string name="home_settings">Настройки</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_back">Назад</string>
+    <string name="settings_fog_opacity">Плотность тумана</string>
+    <string name="settings_display_zoom">Размер пикселя</string>
+    <string name="settings_display_zoom_value">зум %1$d (≈ %2$d м)</string>
+</resources>

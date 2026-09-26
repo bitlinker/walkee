@@ -1,0 +1,35 @@
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (SDK path, MapKit API key)
+local.properties
+
+# IDE
+.idea/
+*.iml
+.kotlin/
+.cxx/
+
+# Android
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+out/
+release/
+
+# Signing
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
