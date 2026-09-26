@@ -1,6 +1,7 @@
 package me.bitlinker.walkee.domain
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +15,7 @@ import me.bitlinker.walkee.data.map.MapRepository
 import me.bitlinker.walkee.di.ApplicationScope
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * The core game loop: while on, turns accepted location fixes into revealed fog cells.
@@ -47,7 +49,10 @@ class TrackingSession @Inject constructor(
         return false
     }
 
-    /** Stops revealing the map; the foreground service follows [isTracking] and stops as well. */
+    /**
+     * Stops revealing the map and saves what was revealed (asynchronously); the foreground service
+     * follows [isTracking] and stops as well.
+     */
     @Synchronized
     fun stop() {
         job?.cancel()
@@ -59,17 +64,31 @@ class TrackingSession @Inject constructor(
         // A process started in the background (auto-start) may get here before AppInitializer has
         // loaded the fog, and loading replaces whatever was painted before it.
         mapRepository.load()
-        var previous: LocationFix? = null
-        locationRepository.fixes.collect { fix ->
-            val radius = brushRadiusMetres(fix)
-            val last = previous
-            val change = if (last != null && GeoDistance.metres(last.point, fix.point) <= MAX_STROKE_METRES) {
-                mapRepository.paintStroke(last.point, fix.point, radius)
-            } else {
-                mapRepository.paintDisk(fix.point, radius)
+        // The repository saves after a pause in changes, which never comes while walking new
+        // ground; the process may be killed at any moment in the background.
+        runSavingPeriodically(SAVE_INTERVAL, ::save) {
+            var previous: LocationFix? = null
+            locationRepository.fixes.collect { fix ->
+                val radius = brushRadiusMetres(fix)
+                val last = previous
+                val change = if (last != null && GeoDistance.metres(last.point, fix.point) <= MAX_STROKE_METRES) {
+                    mapRepository.paintStroke(last.point, fix.point, radius)
+                } else {
+                    mapRepository.paintDisk(fix.point, radius)
+                }
+                if (!change.isEmpty) Log.d(TAG, "Revealed ${change.addedCells} cells")
+                previous = fix
             }
-            if (!change.isEmpty) Log.d(TAG, "Revealed ${change.addedCells} cells")
-            previous = fix
+        }
+    }
+
+    private suspend fun save() {
+        try {
+            mapRepository.flush()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save revealed cells", e)
         }
     }
 
@@ -83,5 +102,7 @@ class TrackingSession @Inject constructor(
         const val MAX_BRUSH_METRES = 35.0
         /** Longer gaps between fixes are not connected: the path in between is unknown. */
         const val MAX_STROKE_METRES = 150.0
+        /** At most this much of a walk is lost if the process dies; also saved when tracking stops. */
+        val SAVE_INTERVAL = 5.minutes
     }
 }

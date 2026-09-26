@@ -7,8 +7,8 @@ import me.bitlinker.walkee.fog.geo.TileKey
  * Immutable snapshot of one chunk: a `256 × 256` [BitGrid] of visited storage cells (ADR 0002).
  *
  * Instances never change; [plus] returns a new chunk (copy-on-write), which lets renderer threads
- * read snapshots without any locking. Coarser [occupancy] grids (e.g. "which 4×4 blocks — display
- * cells — contain at least one visited cell") are derived lazily and cached per snapshot.
+ * read snapshots without any locking. Coarser [occupancy] grids (e.g. "which 8×8 blocks — z18
+ * display cells — contain at least one visited cell") are derived lazily and cached per snapshot.
  */
 class Chunk private constructor(
     val key: TileKey,
