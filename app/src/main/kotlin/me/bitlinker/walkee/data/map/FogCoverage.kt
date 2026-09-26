@@ -22,34 +22,61 @@ sealed interface TileCoverage {
 }
 
 /**
- * Square cells: a `side × side` grid where each cell holds the number of *open
- * display cells* it contains, out of [capacity]. A display cell is open when at least one of its
- * storage cells was visited (ADR 0001).
+ * Square cells: a grid where each cell holds the number of *open display cells* it contains, out
+ * of [capacity]. A display cell is open when at least one of its storage cells was visited
+ * (ADR 0001).
  *
- * - Tiles at or above the display zoom: `side = 1`, `capacity = 1`.
+ * - Tiles at or above the display zoom: `side = 1`; the tile lies inside one display cell and is
+ *   `2^subdivision` times smaller than it, at position ([subX], [subY]) inside it.
  * - Tiles up to 8 zooms below the display zoom: one grid cell per display cell, `capacity = 1`.
  * - Further out: grid cells are `2^k` display cells wide and the counts become densities.
+ *
+ * Painters that look across tile edges (soft fog, ADR 0003) ask for a [margin]: that many extra
+ * cells of context on every side, so [openCounts] is a row-major `stride × stride` grid with the
+ * tile's own cells at `margin until margin + side`. Margins exist only for display-cell grids.
  */
 class FogCoverage(
+    /** Grid cells across the tile itself, `≥ 1`. */
     val side: Int,
     val openCounts: IntArray,
     val capacity: Int,
+    val margin: Int = 0,
+    val subdivision: Int = 0,
+    val subX: Int = 0,
+    val subY: Int = 0,
+    /** Global grid coordinates (at the grid's own zoom) of the first padded cell; anchors world-space effects. */
+    val originX: Int = 0,
+    val originY: Int = 0,
 ) : TileCoverage {
+    /** Row length of [openCounts]: the tile's cells plus the margin on both sides. */
+    val stride: Int get() = side + 2 * margin
+
     init {
-        require(openCounts.size == side * side) { "Expected ${side * side} counts, got ${openCounts.size}" }
+        require(margin >= 0) { "Margin must be non-negative, got $margin" }
+        require(openCounts.size == stride * stride) { "Expected ${stride * stride} counts, got ${openCounts.size}" }
+        require(subdivision == 0 || side == 1) { "Only single-cell tiles can be smaller than a cell" }
+        require(subX in 0 until (1 shl subdivision) && subY in 0 until (1 shl subdivision)) {
+            "Sub-cell position ($subX, $subY) is outside a 2^$subdivision grid"
+        }
     }
 
+    /** True when every cell, margin included, is closed. */
     override val isAllClosed: Boolean get() = openCounts.all { it == 0 }
 
+    /** True when every cell, margin included, is fully open. */
     override val isAllOpen: Boolean get() = openCounts.all { it == capacity }
 
-    /** Fraction of open display cells in grid cell [index], `0f..1f`. */
-    fun openness(index: Int): Float = openCounts[index].toFloat() / capacity
+    /** Open display cells in the cell at ([x], [y]) relative to the tile's first own cell; `-margin until side + margin`. */
+    fun count(x: Int, y: Int): Int = openCounts[(y + margin) * stride + x + margin]
 
-    /** FNV-1a over the grid, see [TileCoverage.fingerprint]. */
+    /** Fraction of open display cells in the cell at ([x], [y]), `0f..1f`; coordinates as in [count]. */
+    fun openness(x: Int, y: Int): Float = count(x, y).toFloat() / capacity
+
+    /** FNV-1a over the grid, margin included, see [TileCoverage.fingerprint]. */
     override fun fingerprint(): Long {
         val hash = Fnv1a()
         hash.mix(side)
+        hash.mix(margin)
         hash.mix(capacity)
         for (count in openCounts) hash.mix(count)
         return hash.value
@@ -81,30 +108,72 @@ object FogCoverageBuilder {
     /** Tiles are 256 px, so a grid finer than `256 × 256` would be sub-pixel. */
     private const val MAX_SIDE_SHIFT = 8
 
-    fun build(storage: MapStorage, tile: TileKey, displayZoom: Int): FogCoverage {
+    /**
+     * Coverage of [tile] with display cells at [displayZoom] and [margin] cells of context around
+     * it. A margin needs one grid cell per display cell: `tile.zoom ≥ displayZoom − 8`.
+     */
+    fun build(storage: MapStorage, tile: TileKey, displayZoom: Int, margin: Int = 0): FogCoverage {
         require(displayZoom in FogGrid.CHUNK_ZOOM..FogGrid.STORAGE_ZOOM) {
             "Display zoom must be in ${FogGrid.CHUNK_ZOOM}..${FogGrid.STORAGE_ZOOM}, got $displayZoom"
         }
-        val blockShift = FogGrid.STORAGE_ZOOM - displayZoom
+        require(margin >= 0) { "Margin must be non-negative, got $margin" }
+        if (tile.zoom >= displayZoom - MAX_SIDE_SHIFT) return buildDisplayGrid(storage, tile, displayZoom, margin)
+        require(margin == 0) { "Margins need one grid cell per display cell; tile $tile is too far out for z$displayZoom" }
+        return buildDensityGrid(storage, tile, displayZoom)
+    }
 
-        if (tile.zoom >= displayZoom) {
-            val open = storage.visitedCount(tile.ancestor(displayZoom)) > 0
-            return FogCoverage(1, intArrayOf(if (open) 1 else 0), 1)
-        }
-
-        val gridZoom = min(displayZoom, tile.zoom + MAX_SIDE_SHIFT)
-        val sideShift = gridZoom - tile.zoom
+    /**
+     * One grid cell per display cell. Looks chunks up directly over the padded window, so the
+     * margin may reach into neighbouring chunks; it wraps across the antimeridian, and rows beyond
+     * the pyramid's latitude cut-off stay closed.
+     */
+    private fun buildDisplayGrid(storage: MapStorage, tile: TileKey, displayZoom: Int, margin: Int): FogCoverage {
+        val subdivision = max(0, tile.zoom - displayZoom)
+        val sideShift = max(0, displayZoom - tile.zoom)
         val side = 1 shl sideShift
+        val stride = side + 2 * margin
+        val originX = (tile.x shl sideShift shr subdivision) - margin
+        val originY = (tile.y shl sideShift shr subdivision) - margin
+        val counts = IntArray(stride * stride)
+
+        val blockShift = FogGrid.STORAGE_ZOOM - displayZoom
+        val chunkShift = displayZoom - FogGrid.CHUNK_ZOOM
+        val chunkSide = 1 shl chunkShift
+        val chunksPerRow = 1 shl FogGrid.CHUNK_ZOOM
+        // Arithmetic shifts floor negative coordinates, so the margin left of x = 0 maps to chunk −1.
+        for (chunkY in (originY shr chunkShift)..((originY + stride - 1) shr chunkShift)) {
+            if (chunkY !in 0 until chunksPerRow) continue
+            for (chunkX in (originX shr chunkShift)..((originX + stride - 1) shr chunkShift)) {
+                val chunk = storage.chunk(TileKey.of(FogGrid.CHUNK_ZOOM, chunkX.mod(chunksPerRow), chunkY)) ?: continue
+                val occupancy = chunk.occupancy(blockShift)
+                val chunkX0 = chunkX shl chunkShift
+                val chunkY0 = chunkY shl chunkShift
+                val fromX = max(chunkX0, originX)
+                val toX = min(chunkX0 + chunkSide, originX + stride)
+                for (gy in max(chunkY0, originY) until min(chunkY0 + chunkSide, originY + stride)) {
+                    val row = (gy - originY) * stride - originX
+                    for (gx in fromX until toX) {
+                        if (occupancy[gx - chunkX0, gy - chunkY0]) counts[row + gx] = 1
+                    }
+                }
+            }
+        }
+        val subMask = (1 shl subdivision) - 1
+        return FogCoverage(side, counts, 1, margin, subdivision, tile.x and subMask, tile.y and subMask, originX, originY)
+    }
+
+    /** `256 × 256` grid whose cells are `2^k` display cells wide; counts are densities. */
+    private fun buildDensityGrid(storage: MapStorage, tile: TileKey, displayZoom: Int): FogCoverage {
+        val blockShift = FogGrid.STORAGE_ZOOM - displayZoom
+        val gridZoom = tile.zoom + MAX_SIDE_SHIFT
+        val side = 1 shl MAX_SIDE_SHIFT
         val counts = IntArray(side * side)
         val displayPerGridShift = displayZoom - gridZoom
         val capacity = 1 shl (2 * displayPerGridShift)
+        val gridX0 = tile.x shl MAX_SIDE_SHIFT
+        val gridY0 = tile.y shl MAX_SIDE_SHIFT
 
         val chunks = storage.chunksWithin(tile)
-        if (chunks.isEmpty()) return FogCoverage(side, counts, capacity)
-
-        val gridX0 = tile.x shl sideShift
-        val gridY0 = tile.y shl sideShift
-
         if (gridZoom <= FogGrid.CHUNK_ZOOM) {
             // Grid cells are whole chunks or larger: add each chunk's open display cells.
             val chunkToGridShift = FogGrid.CHUNK_ZOOM - gridZoom
@@ -135,6 +204,6 @@ object FogCoverageBuilder {
                 }
             }
         }
-        return FogCoverage(side, counts, capacity)
+        return FogCoverage(side, counts, capacity, originX = gridX0, originY = gridY0)
     }
 }

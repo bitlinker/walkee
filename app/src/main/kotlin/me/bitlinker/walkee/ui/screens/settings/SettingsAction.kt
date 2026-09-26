@@ -1,6 +1,7 @@
 package me.bitlinker.walkee.ui.screens.settings
 
 import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
 
 sealed interface SettingsAction {
@@ -9,6 +10,7 @@ sealed interface SettingsAction {
     data class FogOpacityChanged(val opacity: Float) : SettingsAction
     data class DisplayZoomChanged(val zoom: Int) : SettingsAction
     data class CellShapeChanged(val shape: FogCellShape) : SettingsAction
+    data class FogEdgesChanged(val edges: FogEdges) : SettingsAction
     data object ClearExploredClicked : SettingsAction
     data object ClearExploredConfirmed : SettingsAction
     data object ClearExploredDismissed : SettingsAction

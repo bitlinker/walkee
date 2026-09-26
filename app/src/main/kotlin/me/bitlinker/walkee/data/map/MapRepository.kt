@@ -95,7 +95,8 @@ class MapRepository @Inject constructor(
     }
 
     /** Coverage grid for a map tile. Synchronous and thread-safe: called from MapKit worker threads. */
-    fun coverage(tile: TileKey, displayZoom: Int): FogCoverage = FogCoverageBuilder.build(storage, tile, displayZoom)
+    fun coverage(tile: TileKey, displayZoom: Int, margin: Int): FogCoverage =
+        FogCoverageBuilder.build(storage, tile, displayZoom, margin)
 
     /** Hexagon coverage for a map tile. Synchronous and thread-safe, like [coverage]. */
     fun hexCoverage(tile: TileKey, displayZoom: Int): HexCoverage = HexCoverageBuilder.build(storage, tile, HexLattice(displayZoom))

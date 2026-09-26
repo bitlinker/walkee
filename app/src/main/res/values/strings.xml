@@ -20,6 +20,11 @@
     <string name="settings_cell_shape">Pixel shape</string>
     <string name="settings_cell_shape_squares">Squares</string>
     <string name="settings_cell_shape_hexagons">Hexagons</string>
+    <string name="settings_fog_edges">Fog edges</string>
+    <string name="settings_fog_edges_hard">Hard</string>
+    <string name="settings_fog_edges_soft">Soft</string>
+    <string name="settings_fog_edges_clouds">Clouds</string>
+    <string name="settings_fog_edges_hexagons_note">Hexagons always have hard edges</string>
     <string name="settings_clear_explored">Clear explored area</string>
     <string name="settings_clear_explored_title">Clear explored area?</string>
     <string name="settings_clear_explored_message">Everything you have revealed will be covered by fog again. This cannot be undone.</string>

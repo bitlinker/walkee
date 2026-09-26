@@ -1,6 +1,7 @@
 package me.bitlinker.walkee.ui.screens.settings
 
 import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -52,6 +53,13 @@ class SettingsReducerTest {
         assertTrue(failed.clearFailed)
         assertFalse(failed.isClearing)
         assertFalse(reduceSettings(failed, SettingsAction.ClearExploredClicked).clearFailed)
+    }
+
+    @Test
+    fun `edges follow the loaded style and the user's choice`() {
+        val clouds = reduceSettings(SettingsState(), SettingsAction.StyleLoaded(FogStyle(edges = FogEdges.CLOUDS)))
+        assertEquals(FogEdges.CLOUDS, clouds.fogEdges)
+        assertEquals(FogEdges.HARD, reduceSettings(clouds, SettingsAction.FogEdgesChanged(FogEdges.HARD)).fogEdges)
     }
 
     @Test

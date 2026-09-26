@@ -94,7 +94,7 @@ class HexFogTilePainterTest {
     private fun supersampledReference(coverage: HexCoverage): IntArray {
         val tileSide = Math.scalb(1.0, FogGrid.STORAGE_ZOOM - coverage.tile.zoom)
         val pixelSide = tileSide / size
-        val palette = IntArray(17) { FogTilePainter.cellColor(1f - it / 16f, style) }
+        val palette = IntArray(17) { FogPalette.colorOf(1f - it / 16f, style) }
         return IntArray(size * size) { index ->
             val px = index % size
             val py = index / size

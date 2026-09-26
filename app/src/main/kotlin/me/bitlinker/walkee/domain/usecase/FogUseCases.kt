@@ -11,17 +11,22 @@ import me.bitlinker.walkee.data.map.FogInvalidation
 import me.bitlinker.walkee.data.map.HexCoverage
 import me.bitlinker.walkee.data.map.MapRepository
 import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
 import me.bitlinker.walkee.data.settings.SettingsRepository
 import me.bitlinker.walkee.fog.geo.FogGrid
 import me.bitlinker.walkee.fog.geo.TileKey
 import javax.inject.Inject
 
-/** Coverage grid for one map tile; synchronous because MapKit asks for tiles on its own threads. */
+/**
+ * Coverage grid for one map tile with [margin] cells of context around it; synchronous because
+ * MapKit asks for tiles on its own threads.
+ */
 class GetFogTileCoverageUseCase @Inject constructor(
     private val mapRepository: MapRepository,
 ) {
-    operator fun invoke(tile: TileKey, displayZoom: Int): FogCoverage = mapRepository.coverage(tile, displayZoom)
+    operator fun invoke(tile: TileKey, displayZoom: Int, margin: Int): FogCoverage =
+        mapRepository.coverage(tile, displayZoom, margin)
 }
 
 /** Hexagon coverage for one map tile; synchronous for the same reason as [GetFogTileCoverageUseCase]. */
@@ -59,6 +64,12 @@ class SetFogCellShapeUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) {
     suspend operator fun invoke(shape: FogCellShape) = settingsRepository.setCellShape(shape)
+}
+
+class SetFogEdgesUseCase @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) {
+    suspend operator fun invoke(edges: FogEdges) = settingsRepository.setFogEdges(edges)
 }
 
 /** Covers everything explored so far with fog again, for good. */

@@ -9,6 +9,7 @@ import me.bitlinker.walkee.domain.usecase.ClearExploredAreaUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogStyleUseCase
 import me.bitlinker.walkee.domain.usecase.SetFogCellShapeUseCase
 import me.bitlinker.walkee.domain.usecase.SetFogDisplayZoomUseCase
+import me.bitlinker.walkee.domain.usecase.SetFogEdgesUseCase
 import me.bitlinker.walkee.domain.usecase.SetFogOpacityUseCase
 import me.bitlinker.walkee.ui.navigation.Router
 import me.bitlinker.walkee.ui.redux.ReduxViewModel
@@ -20,6 +21,7 @@ class SettingsViewModel @Inject constructor(
     private val setFogOpacity: SetFogOpacityUseCase,
     private val setFogDisplayZoom: SetFogDisplayZoomUseCase,
     private val setFogCellShape: SetFogCellShapeUseCase,
+    private val setFogEdges: SetFogEdgesUseCase,
     private val clearExploredArea: ClearExploredAreaUseCase,
     private val router: Router,
 ) : ReduxViewModel<SettingsState, SettingsAction>(SettingsState(), ::reduceSettings) {
@@ -35,6 +37,7 @@ class SettingsViewModel @Inject constructor(
             is SettingsAction.FogOpacityChanged -> viewModelScope.launch { setFogOpacity(state.fogOpacity) }
             is SettingsAction.DisplayZoomChanged -> viewModelScope.launch { setFogDisplayZoom(state.displayZoom) }
             is SettingsAction.CellShapeChanged -> viewModelScope.launch { setFogCellShape(state.cellShape) }
+            is SettingsAction.FogEdgesChanged -> viewModelScope.launch { setFogEdges(state.fogEdges) }
             SettingsAction.ClearExploredConfirmed -> viewModelScope.launch { dispatch(SettingsAction.ClearExploredFinished(tryClearExploredArea())) }
             SettingsAction.BackClicked -> router.pop()
             is SettingsAction.StyleLoaded,

@@ -28,10 +28,23 @@ enum class FogCellShape(
     val displayZoomRange: IntRange get() = FogStyle.MIN_DISPLAY_ZOOM..maxDisplayZoom
 }
 
+/** How the edges between hidden and revealed square cells are drawn (ADR 0003); hexagons are always hard. */
+enum class FogEdges {
+    /** Hard-edged squares, one per display cell. */
+    HARD,
+
+    /** Gaussian-blurred cells: rounded shapes with soft translucent edges. */
+    SOFT,
+
+    /** [SOFT] with world-anchored noise along the edges. */
+    CLOUDS,
+}
+
 /**
  * How the fog layer is drawn. `displayZoom` is the zoom of one visible "pixel" (ADR 0001), always
  * within the range of [cellShape]. Hidden cells get the fog colour at [opacity]; revealed cells get
- * a light tint of the yellow brand accent at [revealedOpacity] (ADR 0003).
+ * a light tint of the yellow brand accent at [revealedOpacity]; [edges] picks the painter for
+ * square cells (ADR 0003).
  */
 data class FogStyle(
     val opacity: Float = DEFAULT_OPACITY,
@@ -40,6 +53,7 @@ data class FogStyle(
     val colorRgb: Int = DEFAULT_COLOR_RGB,
     val revealedOpacity: Float = DEFAULT_REVEALED_OPACITY,
     val revealedColorRgb: Int = DEFAULT_REVEALED_COLOR_RGB,
+    val edges: FogEdges = DEFAULT_EDGES,
 ) {
     companion object {
         const val DEFAULT_OPACITY = 0.75f
@@ -49,6 +63,7 @@ data class FogStyle(
         /** The theme's accent yellow (`Yellow80` in `ui/theme`). */
         const val DEFAULT_REVEALED_COLOR_RGB = 0xFFD600
         const val MIN_DISPLAY_ZOOM = 16
+        val DEFAULT_EDGES = FogEdges.SOFT
 
         /** Stored display zooms; each shape narrows it to [FogCellShape.displayZoomRange]. */
         val DISPLAY_ZOOM_RANGE = MIN_DISPLAY_ZOOM..FogGrid.STORAGE_ZOOM
@@ -75,6 +90,7 @@ class SettingsRepository @Inject constructor(
                     // The stored zoom is kept as is, so switching back to squares restores it.
                     displayZoom = (preferences[DISPLAY_ZOOM] ?: FogStyle.DEFAULT_DISPLAY_ZOOM).coerceIn(cellShape.displayZoomRange),
                     cellShape = cellShape,
+                    edges = FogEdges.entries.firstOrNull { it.name == preferences[FOG_EDGES] } ?: FogStyle.DEFAULT_EDGES,
                 ),
                 trackingEnabled = preferences[TRACKING_ENABLED] ?: false,
             )
@@ -95,6 +111,10 @@ class SettingsRepository @Inject constructor(
         dataStore.edit { it[CELL_SHAPE] = shape.name }
     }
 
+    suspend fun setFogEdges(edges: FogEdges) {
+        dataStore.edit { it[FOG_EDGES] = edges.name }
+    }
+
     suspend fun setTrackingEnabled(enabled: Boolean) {
         dataStore.edit { it[TRACKING_ENABLED] = enabled }
     }
@@ -103,6 +123,7 @@ class SettingsRepository @Inject constructor(
         val FOG_OPACITY = floatPreferencesKey("fog_opacity")
         val DISPLAY_ZOOM = intPreferencesKey("fog_display_zoom")
         val CELL_SHAPE = stringPreferencesKey("fog_cell_shape")
+        val FOG_EDGES = stringPreferencesKey("fog_edges")
         val TRACKING_ENABLED = booleanPreferencesKey("tracking_enabled")
     }
 }

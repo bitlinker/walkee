@@ -12,7 +12,7 @@ import me.bitlinker.walkee.fog.geo.HexLattice
  *
  * A pixel takes the state of the hexagon its centre falls in. Pixels that an edge between an open
  * and a closed hexagon may cross are supersampled [SUBSAMPLES]², and their open share is mixed like
- * a partly revealed square ([FogTilePainter.cellColor]): slanted edges come out antialiased and a
+ * a partly revealed square ([FogPalette.colorOf]): slanted edges come out antialiased and a
  * tile has at most `SUBSAMPLES² + 1` colours.
  */
 object HexFogTilePainter {
@@ -39,7 +39,7 @@ object HexFogTilePainter {
         val originX = coverage.tile.x * tileSide
         val originY = coverage.tile.y * tileSide
         val reach = pixelSide * PIXEL_REACH
-        val palette = IntArray(SAMPLES + 1) { open -> FogTilePainter.cellColor(1f - open.toFloat() / SAMPLES, style) }
+        val palette = IntArray(SAMPLES + 1) { open -> FogPalette.colorOf(1f - open.toFloat() / SAMPLES, style) }
         val edges = edgeMasks(coverage)
         val pixels = IntArray(TILE_SIZE * TILE_SIZE)
 

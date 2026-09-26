@@ -33,6 +33,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.bitlinker.walkee.R
 import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
 import kotlin.math.roundToInt
 
@@ -86,6 +87,33 @@ fun SettingsScreen(state: SettingsState, dispatch: (SettingsAction) -> Unit) {
                         Text(stringResource(shape.label()))
                     }
                 }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            val edgesSelectable = state.cellShape == FogCellShape.SQUARES
+            Text(text = stringResource(R.string.settings_fog_edges), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val edgeStyles = FogEdges.entries
+                edgeStyles.forEachIndexed { index, edges ->
+                    SegmentedButton(
+                        selected = state.fogEdges == edges,
+                        onClick = { dispatch(SettingsAction.FogEdgesChanged(edges)) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = edgeStyles.size),
+                        enabled = state.isLoaded && edgesSelectable,
+                    ) {
+                        Text(stringResource(edges.label()))
+                    }
+                }
+            }
+            if (!edgesSelectable) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.settings_fog_edges_hexagons_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Spacer(Modifier.height(24.dp))
@@ -152,4 +180,10 @@ fun SettingsScreen(state: SettingsState, dispatch: (SettingsAction) -> Unit) {
 private fun FogCellShape.label(): Int = when (this) {
     FogCellShape.SQUARES -> R.string.settings_cell_shape_squares
     FogCellShape.HEXAGONS -> R.string.settings_cell_shape_hexagons
+}
+
+private fun FogEdges.label(): Int = when (this) {
+    FogEdges.HARD -> R.string.settings_fog_edges_hard
+    FogEdges.SOFT -> R.string.settings_fog_edges_soft
+    FogEdges.CLOUDS -> R.string.settings_fog_edges_clouds
 }

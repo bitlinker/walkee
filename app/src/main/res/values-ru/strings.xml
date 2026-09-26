@@ -18,6 +18,11 @@
     <string name="settings_cell_shape">Форма пикселя</string>
     <string name="settings_cell_shape_squares">Квадраты</string>
     <string name="settings_cell_shape_hexagons">Шестиугольники</string>
+    <string name="settings_fog_edges">Края тумана</string>
+    <string name="settings_fog_edges_hard">Резкие</string>
+    <string name="settings_fog_edges_soft">Мягкие</string>
+    <string name="settings_fog_edges_clouds">Облака</string>
+    <string name="settings_fog_edges_hexagons_note">Шестиугольники всегда с резкими краями</string>
     <string name="settings_clear_explored">Очистить исследованное</string>
     <string name="settings_clear_explored_title">Очистить исследованное?</string>
     <string name="settings_clear_explored_message">Всё, что вы открыли, снова скроется под туманом. Отменить это нельзя.</string>

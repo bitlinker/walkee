@@ -26,6 +26,7 @@ import me.bitlinker.walkee.data.map.FogCoverage
 import me.bitlinker.walkee.data.map.HexCoverage
 import me.bitlinker.walkee.data.map.TileCoverage
 import me.bitlinker.walkee.data.settings.FogCellShape
+import me.bitlinker.walkee.data.settings.FogEdges
 import me.bitlinker.walkee.data.settings.FogStyle
 import me.bitlinker.walkee.domain.usecase.GetFogTileCoverageUseCase
 import me.bitlinker.walkee.domain.usecase.GetFogTileHexCoverageUseCase
@@ -47,6 +48,9 @@ import kotlin.time.Duration.Companion.milliseconds
  * [TileDataSource.invalidate], which re-requests tiles while the old ones stay on screen. Each
  * tile carries an etag derived from its coverage, so re-requests of unchanged tiles are answered
  * with `NOT_MODIFIED` and cost only the coverage computation.
+ *
+ * Hexagon tiles are drawn by [HexFogTilePainter]; square tiles by the [FogTilePainter] picked by
+ * [FogStyle.edges], which also decides how much context around the tile the coverage includes.
  */
 class MapFogLayerRenderer @Inject constructor(
     private val getFogTileCoverage: GetFogTileCoverageUseCase,
@@ -55,7 +59,7 @@ class MapFogLayerRenderer @Inject constructor(
     private val observeFogStyle: ObserveFogStyleUseCase,
 ) {
     private val style = AtomicReference(FogStyle())
-    private val uniformTileCache = AtomicReference<UniformTiles?>(null)
+    private val styleResources = AtomicReference<StyleResources?>(null)
     private val dataVersion = AtomicLong(1)
     private var layer: Layer? = null
     private var tileDataSource: TileDataSource? = null
@@ -132,35 +136,63 @@ class MapFogLayerRenderer @Inject constructor(
         }
     }
 
-    /** Hexagons while they are big enough to see (see [HexFogTilePainter.drawsHexagons]), squares otherwise. */
+    /**
+     * Hexagons while they are big enough to see (see [HexFogTilePainter.drawsHexagons]), squares
+     * otherwise, with the margin their painter needs.
+     */
     private fun coverageOf(tile: TileKey, style: FogStyle): TileCoverage =
         if (style.cellShape == FogCellShape.HEXAGONS && HexFogTilePainter.drawsHexagons(tile.zoom, style.displayZoom)) {
             getFogTileHexCoverage(tile, style.displayZoom)
         } else {
-            getFogTileCoverage(tile, style.displayZoom)
+            getFogTileCoverage(tile, style.displayZoom, squarePainterFor(style).margin(tile.zoom, style.displayZoom))
         }
 
     private fun etagOf(coverage: TileCoverage, style: FogStyle): String =
         "${style.hashCode().toUInt().toString(16)}-${coverage.fingerprint().toULong().toString(16)}"
 
+    // The coverage margin included, so a uniform neighbourhood gives a uniform tile for any painter.
     private fun encode(coverage: TileCoverage, style: FogStyle): ByteArray {
-        if (coverage.isAllOpen) return uniformTiles(style).revealed
-        if (coverage.isAllClosed) return uniformTiles(style).hidden
+        val resources = resourcesFor(style)
+        if (coverage.isAllOpen) return resources.revealedTile
+        if (coverage.isAllClosed) return resources.hiddenTile
         val pixels = when (coverage) {
-            is FogCoverage -> FogTilePainter.paint(coverage, style)
+            is FogCoverage -> squarePainterFor(style).paint(coverage, resources.palette)
             is HexCoverage -> HexFogTilePainter.paint(coverage, style)
         }
         return toPng(pixels)
     }
 
-    /** Most tiles are entirely hidden or entirely revealed; their PNGs are encoded once per style. */
-    private fun uniformTiles(style: FogStyle): UniformTiles {
-        uniformTileCache.get()?.let { if (it.style == style) return it }
-        return UniformTiles(style, toPng(FogTilePainter.solid(style)), toPng(FogTilePainter.revealed(style)))
-            .also { uniformTileCache.set(it) }
+    /** Square cells follow [FogStyle.edges]; with hexagons, far-out square tiles stay hard like the hexagons. */
+    private fun squarePainterFor(style: FogStyle): FogTilePainter {
+        if (style.cellShape == FogCellShape.HEXAGONS) return SquareFogTilePainter
+        return when (style.edges) {
+            FogEdges.HARD -> SquareFogTilePainter
+            FogEdges.SOFT -> SOFT_PAINTER
+            FogEdges.CLOUDS -> CLOUD_PAINTER
+        }
     }
 
-    private class UniformTiles(val style: FogStyle, val hidden: ByteArray, val revealed: ByteArray)
+    /**
+     * The palette and the PNGs of uniform tiles, built once per style: most tiles are entirely
+     * hidden or entirely revealed.
+     */
+    private fun resourcesFor(style: FogStyle): StyleResources {
+        styleResources.get()?.let { if (it.style == style) return it }
+        val palette = FogPalette(style)
+        return StyleResources(
+            style = style,
+            palette = palette,
+            hiddenTile = toPng(FogTilePainter.uniform(palette.hiddenColor)),
+            revealedTile = toPng(FogTilePainter.uniform(palette.revealedColor)),
+        ).also { styleResources.set(it) }
+    }
+
+    private class StyleResources(
+        val style: FogStyle,
+        val palette: FogPalette,
+        val hiddenTile: ByteArray,
+        val revealedTile: ByteArray,
+    )
 
     private fun layerOptions() = LayerOptions(
         /* active = */ true,
@@ -180,6 +212,8 @@ class MapFogLayerRenderer @Inject constructor(
         const val LAYER_ID = "walkee_fog"
         const val MAX_ZOOM_EXCLUSIVE = 24
         val REFRESH_DEBOUNCE = 400.milliseconds
+        val SOFT_PAINTER = SoftFogTilePainter(noise = false)
+        val CLOUD_PAINTER = SoftFogTilePainter(noise = true)
 
         fun toPng(pixels: IntArray): ByteArray =
             IndexedPngEncoder.encode(pixels, FogTilePainter.TILE_SIZE, FogTilePainter.TILE_SIZE)

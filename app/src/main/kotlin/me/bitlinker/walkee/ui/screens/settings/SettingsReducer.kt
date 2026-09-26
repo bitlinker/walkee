@@ -17,11 +17,14 @@ fun reduceSettings(state: SettingsState, action: SettingsAction): SettingsState 
         state.copy(cellShape = action.shape, displayZoom = zoom, displayCellMetres = displayCellMetres(zoom))
     }
 
+    is SettingsAction.FogEdgesChanged -> state.copy(fogEdges = action.edges)
+
     is SettingsAction.StyleLoaded -> state.copy(
         fogOpacity = action.style.opacity,
         displayZoom = action.style.displayZoom,
         displayCellMetres = displayCellMetres(action.style.displayZoom),
         cellShape = action.style.cellShape,
+        fogEdges = action.style.edges,
         isLoaded = true,
     )
 

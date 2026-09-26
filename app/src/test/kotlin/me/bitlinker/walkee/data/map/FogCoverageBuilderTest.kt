@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import kotlin.random.Random
 
 class FogCoverageBuilderTest {
 
@@ -128,6 +129,72 @@ class FogCoverageBuilderTest {
 
         // Same counts but a different grid layout must not collide.
         assertTrue(FogCoverage(1, intArrayOf(0), 1).fingerprint() != FogCoverage(2, IntArray(4), 1).fingerprint())
+    }
+
+    @Test
+    fun `margin holds the display cells around the tile, across chunk boundaries`() {
+        // Visited cells scattered around a chunk corner, so margins reach into up to four chunks.
+        val chunk = displayCell.ancestor(FogGrid.CHUNK_ZOOM)
+        val cornerX = (chunk.x + 1) shl FogGrid.CHUNK_SHIFT
+        val cornerY = (chunk.y + 1) shl FogGrid.CHUNK_SHIFT
+        val random = Random(11)
+        storage.markVisited(List(400) { TileKey.of(20, cornerX + random.nextInt(-48, 48), cornerY + random.nextInt(-48, 48)) })
+        val corner = TileKey.of(20, cornerX, cornerY)
+
+        for (zoom in listOf(10, 13, 16, 17, 18, 19, 20)) {
+            val southEast = corner.ancestor(zoom)
+            for (tile in listOf(southEast, TileKey.of(zoom, southEast.x - 1, southEast.y - 1))) {
+                val coverage = FogCoverageBuilder.build(storage, tile, displayZoom, margin = 2)
+                val ownX = if (zoom >= displayZoom) tile.x shr (zoom - displayZoom) else tile.x shl (displayZoom - zoom)
+                val ownY = if (zoom >= displayZoom) tile.y shr (zoom - displayZoom) else tile.y shl (displayZoom - zoom)
+                assertEquals(ownX - 2, coverage.originX, "$tile")
+                assertEquals(ownY - 2, coverage.originY, "$tile")
+                for (y in -2 until coverage.side + 2) {
+                    for (x in -2 until coverage.side + 2) {
+                        val cell = TileKey.of(displayZoom, ownX + x, ownY + y)
+                        val expected = if (storage.visitedCount(cell) > 0) 1 else 0
+                        assertEquals(expected, coverage.count(x, y), "$tile, cell ($x, $y)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `tiles above the display zoom know where they lie inside their cell`() {
+        val tile = TileKey.of(20, (displayCell.x shl 2) + 3, (displayCell.y shl 2) + 1)
+        val coverage = FogCoverageBuilder.build(storage, tile, displayZoom, margin = 2)
+        assertEquals(1, coverage.side)
+        assertEquals(5, coverage.stride)
+        assertEquals(2, coverage.subdivision)
+        assertEquals(3, coverage.subX)
+        assertEquals(1, coverage.subY)
+    }
+
+    @Test
+    fun `margins wrap across the antimeridian and stay closed beyond the poles`() {
+        storage.markVisited(listOf(TileKey.of(20, (1 shl 20) - 1, 0)))
+        val coverage = FogCoverageBuilder.build(storage, TileKey.of(displayZoom, 0, 0), displayZoom, margin = 2)
+        assertEquals(1, coverage.count(-1, 0))
+        assertEquals(1, coverage.openCounts.sum())
+    }
+
+    @Test
+    fun `margin cells take part in the fingerprint`() {
+        fun fingerprint(margin: Int) = FogCoverageBuilder.build(storage, displayCell, displayZoom, margin).fingerprint()
+        val before = fingerprint(2)
+        val withoutMargin = fingerprint(0)
+
+        storage.markVisited(listOf(TileKey.of(20, (displayCell.x + 1) shl 2, displayCell.y shl 2)))
+        assertTrue(before != fingerprint(2))
+        assertEquals(withoutMargin, fingerprint(0))
+    }
+
+    @Test
+    fun `margins are rejected for density grids`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            FogCoverageBuilder.build(storage, displayCell.ancestor(9), displayZoom, margin = 2)
+        }
     }
 
     @Test
