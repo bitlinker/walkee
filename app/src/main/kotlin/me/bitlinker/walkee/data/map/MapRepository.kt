@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,7 +32,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /** Tells renderers which tiles went stale. */
 sealed interface FogInvalidation {
-    /** Everything: after loading from disk. */
+    /** Everything: after loading from disk or clearing. */
     data object All : FogInvalidation
 
     data class Chunks(val chunks: Set<TileKey>) : FogInvalidation
@@ -98,6 +99,20 @@ class MapRepository @Inject constructor(
 
     /** Hexagon coverage for a map tile. Synchronous and thread-safe, like [coverage]. */
     fun hexCoverage(tile: TileKey, displayZoom: Int): HexCoverage = HexCoverageBuilder.build(storage, tile, HexLattice(displayZoom))
+
+    /**
+     * Forgets all explored area, in memory and on disk, and refreshes the fog. Serialized with
+     * [load], so a load in progress cannot bring the old chunks back. Runs to the end even if the
+     * caller is cancelled: a half-done clear would leave forgotten cells on the map.
+     */
+    suspend fun clear() = withContext(NonCancellable) {
+        loadMutex.withLock {
+            withContext(ioDispatcher) { storage.clear() }
+        }
+        publishProgress()
+        fullInvalidations.tryEmit(FogInvalidation.All)
+        Log.i(TAG, "Cleared all explored area")
+    }
 
     /** Writes unsaved chunks now (e.g. when the app goes to background). */
     suspend fun flush() {

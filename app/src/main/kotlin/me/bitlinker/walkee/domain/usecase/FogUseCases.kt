@@ -61,6 +61,13 @@ class SetFogCellShapeUseCase @Inject constructor(
     suspend operator fun invoke(shape: FogCellShape) = settingsRepository.setCellShape(shape)
 }
 
+/** Covers everything explored so far with fog again, for good. */
+class ClearExploredAreaUseCase @Inject constructor(
+    private val mapRepository: MapRepository,
+) {
+    suspend operator fun invoke() = mapRepository.clear()
+}
+
 class FlushFogUseCase @Inject constructor(
     private val mapRepository: MapRepository,
 ) {

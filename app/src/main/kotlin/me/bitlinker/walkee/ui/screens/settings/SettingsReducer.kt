@@ -25,6 +25,14 @@ fun reduceSettings(state: SettingsState, action: SettingsAction): SettingsState 
         isLoaded = true,
     )
 
+    SettingsAction.ClearExploredClicked -> state.copy(isClearConfirmationShown = true, clearFailed = false)
+
+    SettingsAction.ClearExploredDismissed -> state.copy(isClearConfirmationShown = false)
+
+    SettingsAction.ClearExploredConfirmed -> state.copy(isClearConfirmationShown = false, isClearing = true)
+
+    is SettingsAction.ClearExploredFinished -> state.copy(isClearing = false, clearFailed = !action.success)
+
     SettingsAction.BackClicked -> state
 }
 

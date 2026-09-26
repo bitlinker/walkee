@@ -14,6 +14,9 @@ interface ChunkStore {
     /** Persists the given snapshots, replacing earlier versions of the same chunks. */
     fun save(chunks: Collection<Chunk>)
 
+    /** Removes every stored chunk. */
+    fun deleteAll()
+
     data class LoadResult(val chunks: List<Chunk>, val failures: List<Failure>) {
         data class Failure(val source: String, val error: Exception)
     }
@@ -30,6 +33,8 @@ class InMemoryChunkStore : ChunkStore {
     override fun save(chunks: Collection<Chunk>) = synchronized(this.chunks) {
         for (chunk in chunks) this.chunks[chunk.key.packed] = chunk
     }
+
+    override fun deleteAll() = synchronized(chunks) { chunks.clear() }
 
     val size: Int get() = synchronized(chunks) { chunks.size }
 }
@@ -71,6 +76,14 @@ class FileChunkStore(private val directory: File) : ChunkStore {
             } catch (e: AtomicMoveNotSupportedException) {
                 Files.move(temp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
+        }
+    }
+
+    /** Deletes chunk files, including leftover temp files and quarantined corrupt ones. */
+    override fun deleteAll() {
+        val files = directory.listFiles { file -> file.isFile && CHUNK_EXTENSION in file.name } ?: return
+        for (file in files) {
+            if (!file.delete() && file.exists()) throw IOException("Cannot delete $file")
         }
     }
 

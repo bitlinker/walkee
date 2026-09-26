@@ -10,4 +10,7 @@ data class SettingsState(
     /** Approximate side of one displayed pixel at the reference latitude, metres. */
     val displayCellMetres: Int = 0,
     val isLoaded: Boolean = false,
+    val isClearConfirmationShown: Boolean = false,
+    val isClearing: Boolean = false,
+    val clearFailed: Boolean = false,
 )

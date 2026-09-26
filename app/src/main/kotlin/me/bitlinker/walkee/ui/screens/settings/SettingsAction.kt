@@ -9,7 +9,11 @@ sealed interface SettingsAction {
     data class FogOpacityChanged(val opacity: Float) : SettingsAction
     data class DisplayZoomChanged(val zoom: Int) : SettingsAction
     data class CellShapeChanged(val shape: FogCellShape) : SettingsAction
+    data object ClearExploredClicked : SettingsAction
+    data object ClearExploredConfirmed : SettingsAction
+    data object ClearExploredDismissed : SettingsAction
 
     // From use cases
     data class StyleLoaded(val style: FogStyle) : SettingsAction
+    data class ClearExploredFinished(val success: Boolean) : SettingsAction
 }

@@ -15,10 +15,10 @@ import java.util.concurrent.ConcurrentSkipListMap
  *
  * Threading: reads are lock-free and safe from any thread (map tile renderers call them from
  * MapKit worker threads); writes are serialized internally and cheap (copy-on-write of one 8 KB
- * chunk). [load] and [flush] block on I/O — run them on an I/O dispatcher.
+ * chunk). [load], [flush] and [clear] block on I/O — run them on an I/O dispatcher.
  *
- * Cells can only be marked visited, never cleared; that keeps aggregates and cross-device merges
- * trivial (bitwise OR).
+ * Single cells can only be marked visited, never unmarked; that keeps aggregates and cross-device
+ * merges trivial (bitwise OR). The only way back is [clear], which forgets everything.
  */
 class MapStorage(private val store: ChunkStore) {
 
@@ -26,6 +26,10 @@ class MapStorage(private val store: ChunkStore) {
     private val aggregates = AggregateIndex()
     private val dirtyChunks = LinkedHashSet<Long>()
     private val writeLock = Any()
+
+    // Serializes disk writes ([flush]) with deletion ([clear]) so a flush that started before a
+    // clear cannot bring deleted chunks back. Always taken before [writeLock].
+    private val ioLock = Any()
 
     private val _changes = MutableSharedFlow<ChangeSet>(
         extraBufferCapacity = CHANGES_BUFFER,
@@ -131,7 +135,7 @@ class MapStorage(private val store: ChunkStore) {
      * Writes all chunks changed since the last flush. Blocking. Returns the number of chunks
      * written; on failure the chunks stay dirty and the exception propagates.
      */
-    fun flush(): Int {
+    fun flush(): Int = synchronized(ioLock) {
         val snapshot: List<Chunk>
         synchronized(writeLock) {
             if (dirtyChunks.isEmpty()) return 0
@@ -144,7 +148,28 @@ class MapStorage(private val store: ChunkStore) {
             synchronized(writeLock) { for (chunk in snapshot) dirtyChunks += chunk.key.packed }
             throw e
         }
-        return snapshot.size
+        snapshot.size
+    }
+
+    /**
+     * Forgets every visited cell, on disk and in memory. Blocking. Does not emit to [changes]; the
+     * caller refreshes whatever shows the fog.
+     *
+     * If the store fails to delete, nothing is forgotten: all chunks are marked dirty so the next
+     * [flush] rewrites files that were already deleted, and the exception propagates.
+     */
+    fun clear() = synchronized(ioLock) {
+        try {
+            store.deleteAll()
+        } catch (e: Exception) {
+            synchronized(writeLock) { dirtyChunks += chunks.keys }
+            throw e
+        }
+        synchronized(writeLock) {
+            chunks.clear()
+            aggregates.clear()
+            dirtyChunks.clear()
+        }
     }
 
     private companion object {

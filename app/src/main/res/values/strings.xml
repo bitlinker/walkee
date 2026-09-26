@@ -20,4 +20,10 @@
     <string name="settings_cell_shape">Pixel shape</string>
     <string name="settings_cell_shape_squares">Squares</string>
     <string name="settings_cell_shape_hexagons">Hexagons</string>
+    <string name="settings_clear_explored">Clear explored area</string>
+    <string name="settings_clear_explored_title">Clear explored area?</string>
+    <string name="settings_clear_explored_message">Everything you have revealed will be covered by fog again. This cannot be undone.</string>
+    <string name="settings_clear_explored_confirm">Clear</string>
+    <string name="settings_clear_explored_failed">Could not clear the explored area. Try again.</string>
+    <string name="settings_cancel">Cancel</string>
 </resources>

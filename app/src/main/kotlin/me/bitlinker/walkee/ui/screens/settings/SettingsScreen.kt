@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.ui.screens.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,16 +9,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -99,7 +104,48 @@ fun SettingsScreen(state: SettingsState, dispatch: (SettingsAction) -> Unit) {
                 enabled = state.isLoaded,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Spacer(Modifier.height(32.dp))
+
+            OutlinedButton(
+                onClick = { dispatch(SettingsAction.ClearExploredClicked) },
+                enabled = !state.isClearing,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.settings_clear_explored))
+            }
+            if (state.clearFailed) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = stringResource(R.string.settings_clear_explored_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
+    }
+
+    if (state.isClearConfirmationShown) {
+        AlertDialog(
+            onDismissRequest = { dispatch(SettingsAction.ClearExploredDismissed) },
+            title = { Text(stringResource(R.string.settings_clear_explored_title)) },
+            text = { Text(stringResource(R.string.settings_clear_explored_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = { dispatch(SettingsAction.ClearExploredConfirmed) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Text(stringResource(R.string.settings_clear_explored_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dispatch(SettingsAction.ClearExploredDismissed) }) {
+                    Text(stringResource(R.string.settings_cancel))
+                }
+            },
+        )
     }
 }
 

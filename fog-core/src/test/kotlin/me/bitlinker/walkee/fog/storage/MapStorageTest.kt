@@ -160,11 +160,60 @@ class MapStorageTest {
         val failing = object : ChunkStore {
             override fun loadAll() = ChunkStore.LoadResult(emptyList(), emptyList())
             override fun save(chunks: Collection<Chunk>) = throw IOException("disk full")
+            override fun deleteAll() = Unit
         }
         val storage = newStorage(failing)
         storage.markVisited(block)
         assertThrows(IOException::class.java) { storage.flush() }
         assertTrue(storage.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `clear forgets everything in memory and on disk`(@TempDir dir: File) {
+        val storage = newStorage(FileChunkStore(dir))
+        storage.markVisited(block)
+        storage.flush()
+        storage.markVisited(listOf(TileKey.of(20, 100, 100))) // unsaved
+        File(dir, "deadbeef00000000.chunk.corrupt").writeBytes(ByteArray(4))
+        File(dir, "unrelated.txt").writeText("keep")
+
+        storage.clear()
+        assertEquals(0L, storage.visitedCellCount)
+        assertEquals(0, storage.chunkCount)
+        assertEquals(0L, storage.visitedCount(TileKey.ROOT))
+        assertFalse(storage.isVisited(block[0]))
+        assertFalse(storage.hasUnsavedChanges)
+        assertEquals(0, storage.flush())
+        assertEquals(listOf("unrelated.txt"), dir.list()!!.toList())
+
+        val restored = newStorage(FileChunkStore(dir))
+        assertTrue(restored.load().chunks.isEmpty())
+
+        // Still usable afterwards.
+        storage.markVisited(block)
+        assertEquals(4L, storage.visitedCellCount)
+        assertEquals(1, storage.flush())
+    }
+
+    @Test
+    fun `failed clear keeps every cell and rewrites it on the next flush`() {
+        val store = object : ChunkStore {
+            val saved = ArrayList<Chunk>()
+            var failDelete = true
+            override fun loadAll() = ChunkStore.LoadResult(emptyList(), emptyList())
+            override fun save(chunks: Collection<Chunk>) { saved += chunks }
+            override fun deleteAll() { if (failDelete) throw IOException("read-only") }
+        }
+        val storage = newStorage(store)
+        storage.markVisited(block)
+        storage.flush()
+        store.saved.clear()
+
+        assertThrows(IOException::class.java) { storage.clear() }
+        assertEquals(4L, storage.visitedCellCount)
+        assertTrue(storage.hasUnsavedChanges)
+        assertEquals(1, storage.flush())
+        assertEquals(listOf(chunkKey), store.saved.map { it.key })
     }
 
     @Test
