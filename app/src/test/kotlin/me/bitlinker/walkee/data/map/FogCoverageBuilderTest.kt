@@ -113,6 +113,24 @@ class FogCoverageBuilderTest {
     }
 
     @Test
+    fun `fingerprint changes exactly when coverage changes`() {
+        val tile = displayCell.ancestor(14)
+        val before = FogCoverageBuilder.build(storage, tile, displayZoom)
+        assertEquals(before.fingerprint(), FogCoverageBuilder.build(storage, tile, displayZoom).fingerprint())
+
+        storage.markVisited(listOf(cellsInDisplayCell[0]))
+        val after = FogCoverageBuilder.build(storage, tile, displayZoom)
+        assertTrue(before.fingerprint() != after.fingerprint())
+
+        // Another storage cell inside the same display cell does not change what is shown.
+        storage.markVisited(listOf(cellsInDisplayCell[1]))
+        assertEquals(after.fingerprint(), FogCoverageBuilder.build(storage, tile, displayZoom).fingerprint())
+
+        // Same counts but a different grid layout must not collide.
+        assertTrue(FogCoverage(1, intArrayOf(0), 1).fingerprint() != FogCoverage(2, IntArray(4), 1).fingerprint())
+    }
+
+    @Test
     fun `rejects display zoom outside the chunk-to-storage range`() {
         assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, 11) }
         assertThrows(IllegalArgumentException::class.java) { FogCoverageBuilder.build(storage, TileKey.ROOT, 21) }

@@ -30,6 +30,26 @@ class FogCoverage(
 
     /** Fraction of open display cells in grid cell [index], `0f..1f`. */
     fun openness(index: Int): Float = openCounts[index].toFloat() / capacity
+
+    /**
+     * 64-bit FNV-1a hash of the grid: equal coverages always match, different ones collide with
+     * negligible probability. Used as the tile etag so unchanged tiles are not re-rendered.
+     */
+    fun fingerprint(): Long {
+        var hash = FNV_OFFSET
+        fun mix(value: Int) {
+            hash = (hash xor (value.toLong() and 0xFFFFFFFFL)) * FNV_PRIME
+        }
+        mix(side)
+        mix(capacity)
+        for (count in openCounts) mix(count)
+        return hash
+    }
+
+    private companion object {
+        const val FNV_OFFSET = -0x340d631b7bdddcdbL // 0xcbf29ce484222325
+        const val FNV_PRIME = 0x100000001b3L
+    }
 }
 
 /** Builds [FogCoverage] for a tile from [MapStorage] primitives; runs on renderer threads. */

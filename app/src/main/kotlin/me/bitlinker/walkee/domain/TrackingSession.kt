@@ -45,7 +45,6 @@ class TrackingSession @Inject constructor(
     private suspend fun track() {
         var previous: LocationFix? = null
         locationRepository.fixes.collect { fix ->
-            Log.d(TAG, "Fix ${fix.point.latitude}, ${fix.point.longitude} ±${fix.accuracyMetres} m")
             val radius = brushRadiusMetres(fix)
             val last = previous
             val change = if (last != null && GeoDistance.metres(last.point, fix.point) <= MAX_STROKE_METRES) {

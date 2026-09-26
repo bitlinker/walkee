@@ -1,15 +1,17 @@
 package me.bitlinker.walkee.ui.map
 
-import android.graphics.Bitmap
 import android.util.Log
 import com.yandex.mapkit.RawTile
 import com.yandex.mapkit.TileId
 import com.yandex.mapkit.Version
 import com.yandex.mapkit.ZoomRange
 import com.yandex.mapkit.geometry.geo.Projections
+import com.yandex.mapkit.layers.BaseDataSource
+import com.yandex.mapkit.layers.DataSourceListener
 import com.yandex.mapkit.layers.Layer
 import com.yandex.mapkit.layers.LayerOptions
 import com.yandex.mapkit.layers.OverzoomMode
+import com.yandex.mapkit.layers.TileDataSource
 import com.yandex.mapkit.layers.TileFormat
 import com.yandex.mapkit.map.Map
 import com.yandex.mapkit.tiles.TileProvider
@@ -26,8 +28,8 @@ import me.bitlinker.walkee.domain.usecase.GetFogTileCoverageUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogInvalidationsUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogStyleUseCase
 import me.bitlinker.walkee.fog.geo.TileKey
-import java.io.ByteArrayOutputStream
 import java.lang.ref.WeakReference
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
@@ -35,6 +37,12 @@ import kotlin.time.Duration.Companion.milliseconds
 /**
  * The fog-of-war layer: a MapKit raster tile layer whose tiles are rendered on demand from fog
  * storage (ADR 0003). Owns the [TileProvider] strongly — MapKit keeps only a weak reference.
+ *
+ * Refresh without flicker: instead of `DataSourceLayer.clear()` (drops every tile at once, so the
+ * light base map flashes through) the layer is versioned and refreshed with
+ * [TileDataSource.invalidate], which re-requests tiles while the old ones stay on screen. Each
+ * tile carries an etag derived from its coverage, so re-requests of unchanged tiles are answered
+ * with `NOT_MODIFIED` and cost only the coverage computation.
  */
 class MapFogLayerRenderer @Inject constructor(
     private val getFogTileCoverage: GetFogTileCoverageUseCase,
@@ -43,26 +51,38 @@ class MapFogLayerRenderer @Inject constructor(
 ) {
     private val style = AtomicReference(FogStyle())
     private val solidTileCache = AtomicReference<Pair<FogStyle, ByteArray>?>(null)
+    private val dataVersion = AtomicLong(1)
     private var layer: Layer? = null
+    private var tileDataSource: TileDataSource? = null
 
     private val tileProvider = TileProvider { tileId, version, features, etag ->
         loadTile(tileId, version, features, etag)
     }
 
+    // Kept as a field: MapKit holds listeners weakly. Delivers the data source behind the layer,
+    // which is the only handle for versioned invalidation in MapKit 4.x.
+    private val dataSourceListener = DataSourceListener { source: BaseDataSource ->
+        tileDataSource = source as? TileDataSource
+        Log.i(TAG, "Fog data source ${source.id} attached, versioned refresh ${if (tileDataSource != null) "on" else "unavailable"}")
+    }
+
     fun attach(map: Map, scope: CoroutineScope) {
         check(layer == null) { "Fog layer is already attached" }
-        layer = map.addTileLayer(LAYER_ID, layerOptions()) { builder ->
+        val added = map.addTileLayer(LAYER_ID, layerOptions()) { builder ->
             builder.setTileFormat(TileFormat.PNG)
             builder.setProjection(Projections.getWgs84Mercator())
             builder.setZoomRanges(listOf(ZoomRange(0, MAX_ZOOM_EXCLUSIVE)))
             builder.setTileProvider(WeakReference(tileProvider))
         }
+        added.dataSourceLayer().setDataSourceListener(WeakReference(dataSourceListener))
+        layer = added
         scope.launch { observeInvalidations() }
     }
 
     fun detach() {
         layer?.let { if (it.isValid) it.remove() }
         layer = null
+        tileDataSource = null
     }
 
     @OptIn(FlowPreview::class)
@@ -74,11 +94,17 @@ class MapFogLayerRenderer @Inject constructor(
             .collectLatest { refresh() }
     }
 
-    /** Drops cached tiles and re-requests the visible ones. Must run on the main thread. */
+    /** Re-requests visible tiles. Must run on the main thread. */
     private fun refresh() {
         val current = layer ?: return
         if (!current.isValid) return
-        current.dataSourceLayer().clear()
+        val source = tileDataSource
+        if (source != null && source.isValid) {
+            source.invalidate(dataVersion.incrementAndGet().toString())
+        } else {
+            // Fallback: flickers, but keeps the fog correct if the data source never arrives.
+            current.dataSourceLayer().clear()
+        }
     }
 
     private fun loadTile(tileId: TileId, version: Version, features: kotlin.collections.Map<String, String>, etag: String): RawTile {
@@ -86,12 +112,23 @@ class MapFogLayerRenderer @Inject constructor(
         return try {
             val tile = TileKey.of(tileId.z, tileId.x, tileId.y)
             val coverage = getFogTileCoverage(tile, currentStyle.displayZoom)
-            RawTile(version, features, etag, RawTile.UseCache.NO, RawTile.State.OK, encode(coverage, currentStyle))
+            val tileEtag = etagOf(coverage, currentStyle)
+            // UseCache.YES lets MapKit keep tiles in memory, so returning to a zoom level (and
+            // overzoom placeholders while zooming out) does not start from an empty layer.
+            // Freshness comes from versioned invalidation + etags, not from dropping the cache.
+            if (tileEtag == etag) {
+                RawTile(version, features, etag, RawTile.UseCache.YES, RawTile.State.NOT_MODIFIED, ByteArray(0))
+            } else {
+                RawTile(version, features, tileEtag, RawTile.UseCache.YES, RawTile.State.OK, encode(coverage, currentStyle))
+            }
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Tile ${tileId.z}/${tileId.x}/${tileId.y} is outside the pyramid", e)
             RawTile(version, features, etag, RawTile.UseCache.NO, RawTile.State.ERROR, ByteArray(0))
         }
     }
+
+    private fun etagOf(coverage: FogCoverage, style: FogStyle): String =
+        "${style.hashCode().toUInt().toString(16)}-${coverage.fingerprint().toULong().toString(16)}"
 
     private fun encode(coverage: FogCoverage, style: FogStyle): ByteArray {
         if (coverage.isAllOpen) return TRANSPARENT_TILE
@@ -112,25 +149,22 @@ class MapFogLayerRenderer @Inject constructor(
         /* cacheable = */ false,
         /* animateOnActivation = */ false,
         /* tileAppearingAnimationDuration = */ 0L,
+        // Shows cached tiles of adjacent zooms while a level loads. WITH_PREFETCH was tried and
+        // made no visible difference (ADR 0003).
         /* overzoomMode = */ OverzoomMode.ENABLED,
         /* transparent = */ true,
-        /* versionSupport = */ false,
+        /* versionSupport = */ true,
     )
 
     private companion object {
         const val TAG = "MapFogLayerRenderer"
         const val LAYER_ID = "walkee_fog"
         const val MAX_ZOOM_EXCLUSIVE = 24
-        val REFRESH_DEBOUNCE = 700.milliseconds
+        val REFRESH_DEBOUNCE = 400.milliseconds
 
         val TRANSPARENT_TILE: ByteArray = toPng(IntArray(FogTilePainter.TILE_SIZE * FogTilePainter.TILE_SIZE))
 
-        fun toPng(pixels: IntArray): ByteArray {
-            val bitmap = Bitmap.createBitmap(pixels, FogTilePainter.TILE_SIZE, FogTilePainter.TILE_SIZE, Bitmap.Config.ARGB_8888)
-            val out = ByteArrayOutputStream(4096)
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-            bitmap.recycle()
-            return out.toByteArray()
-        }
+        fun toPng(pixels: IntArray): ByteArray =
+            IndexedPngEncoder.encode(pixels, FogTilePainter.TILE_SIZE, FogTilePainter.TILE_SIZE)
     }
 }
