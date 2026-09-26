@@ -23,8 +23,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import me.bitlinker.walkee.data.map.FogCoverage
+import me.bitlinker.walkee.data.map.HexCoverage
+import me.bitlinker.walkee.data.map.TileCoverage
+import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogStyle
 import me.bitlinker.walkee.domain.usecase.GetFogTileCoverageUseCase
+import me.bitlinker.walkee.domain.usecase.GetFogTileHexCoverageUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogInvalidationsUseCase
 import me.bitlinker.walkee.domain.usecase.ObserveFogStyleUseCase
 import me.bitlinker.walkee.fog.geo.TileKey
@@ -46,6 +50,7 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 class MapFogLayerRenderer @Inject constructor(
     private val getFogTileCoverage: GetFogTileCoverageUseCase,
+    private val getFogTileHexCoverage: GetFogTileHexCoverageUseCase,
     private val observeFogInvalidations: ObserveFogInvalidationsUseCase,
     private val observeFogStyle: ObserveFogStyleUseCase,
 ) {
@@ -111,7 +116,7 @@ class MapFogLayerRenderer @Inject constructor(
         val currentStyle = style.get()
         return try {
             val tile = TileKey.of(tileId.z, tileId.x, tileId.y)
-            val coverage = getFogTileCoverage(tile, currentStyle.displayZoom)
+            val coverage = coverageOf(tile, currentStyle)
             val tileEtag = etagOf(coverage, currentStyle)
             // UseCache.YES lets MapKit keep tiles in memory, so returning to a zoom level (and
             // overzoom placeholders while zooming out) does not start from an empty layer.
@@ -127,13 +132,25 @@ class MapFogLayerRenderer @Inject constructor(
         }
     }
 
-    private fun etagOf(coverage: FogCoverage, style: FogStyle): String =
+    /** Hexagons while they are big enough to see (see [HexFogTilePainter.drawsHexagons]), squares otherwise. */
+    private fun coverageOf(tile: TileKey, style: FogStyle): TileCoverage =
+        if (style.cellShape == FogCellShape.HEXAGONS && HexFogTilePainter.drawsHexagons(tile.zoom, style.displayZoom)) {
+            getFogTileHexCoverage(tile, style.displayZoom)
+        } else {
+            getFogTileCoverage(tile, style.displayZoom)
+        }
+
+    private fun etagOf(coverage: TileCoverage, style: FogStyle): String =
         "${style.hashCode().toUInt().toString(16)}-${coverage.fingerprint().toULong().toString(16)}"
 
-    private fun encode(coverage: FogCoverage, style: FogStyle): ByteArray {
+    private fun encode(coverage: TileCoverage, style: FogStyle): ByteArray {
         if (coverage.isAllOpen) return uniformTiles(style).revealed
         if (coverage.isAllClosed) return uniformTiles(style).hidden
-        return toPng(FogTilePainter.paint(coverage, style))
+        val pixels = when (coverage) {
+            is FogCoverage -> FogTilePainter.paint(coverage, style)
+            is HexCoverage -> HexFogTilePainter.paint(coverage, style)
+        }
+        return toPng(pixels)
     }
 
     /** Most tiles are entirely hidden or entirely revealed; their PNGs are encoded once per style. */

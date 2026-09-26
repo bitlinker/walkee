@@ -72,6 +72,29 @@ class BitGridTest {
         assertEquals(1024, BitGrid.wordCount(8))
     }
 
+    @ParameterizedTest(name = "side shift {0}")
+    @ValueSource(ints = [0, 2, 3, 5, 6, 8])
+    fun `forEachSetBit visits exactly the set bits of a rectangle`(sideShift: Int) {
+        val random = Random(sideShift + 5)
+        val side = 1 shl sideShift
+        val grid = BitGrid.empty(sideShift).plus(IntArray(maxOf(1, side * side / 4)) { random.nextInt(side * side) })
+        repeat(50) {
+            val fromX = random.nextInt(side + 1)
+            val toX = random.nextInt(fromX, side + 1)
+            val fromY = random.nextInt(side + 1)
+            val toY = random.nextInt(fromY, side + 1)
+            val expected = ArrayList<Pair<Int, Int>>()
+            for (y in fromY until toY) for (x in fromX until toX) if (grid[x, y]) expected += x to y
+            val visited = ArrayList<Pair<Int, Int>>()
+            grid.forEachSetBit(fromX, fromY, toX, toY) { x, y -> visited += x to y }
+            assertEquals(expected, visited, "rectangle [$fromX, $toX) × [$fromY, $toY)")
+        }
+        val all = ArrayList<Int>()
+        grid.forEachSetBit(0, 0, side, side) { x, y -> all += grid.index(x, y) }
+        assertEquals(grid.cardinality, all.size)
+        assertThrows(IllegalArgumentException::class.java) { grid.forEachSetBit(0, 0, side + 1, side) { _, _ -> } }
+    }
+
     @Test
     fun `plus is copy-on-write`() {
         val a = BitGrid.empty(3)

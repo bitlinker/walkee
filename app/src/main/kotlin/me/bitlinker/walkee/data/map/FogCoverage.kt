@@ -6,8 +6,23 @@ import me.bitlinker.walkee.fog.storage.MapStorage
 import kotlin.math.max
 import kotlin.math.min
 
+/** What a map tile should show; built by the data layer, drawn by a painter in `ui/map`. */
+sealed interface TileCoverage {
+    /** Nothing in the tile is revealed. */
+    val isAllClosed: Boolean
+
+    /** Everything in the tile is revealed. */
+    val isAllOpen: Boolean
+
+    /**
+     * 64-bit hash of what the tile shows: equal coverages always match, different ones collide
+     * with negligible probability. Used as the tile etag so unchanged tiles are not re-rendered.
+     */
+    fun fingerprint(): Long
+}
+
 /**
- * What a map tile should show: a `side × side` grid where each cell holds the number of *open
+ * Square cells: a `side × side` grid where each cell holds the number of *open
  * display cells* it contains, out of [capacity]. A display cell is open when at least one of its
  * storage cells was visited (ADR 0001).
  *
@@ -19,36 +34,45 @@ class FogCoverage(
     val side: Int,
     val openCounts: IntArray,
     val capacity: Int,
-) {
+) : TileCoverage {
     init {
         require(openCounts.size == side * side) { "Expected ${side * side} counts, got ${openCounts.size}" }
     }
 
-    val isAllClosed: Boolean get() = openCounts.all { it == 0 }
+    override val isAllClosed: Boolean get() = openCounts.all { it == 0 }
 
-    val isAllOpen: Boolean get() = openCounts.all { it == capacity }
+    override val isAllOpen: Boolean get() = openCounts.all { it == capacity }
 
     /** Fraction of open display cells in grid cell [index], `0f..1f`. */
     fun openness(index: Int): Float = openCounts[index].toFloat() / capacity
 
-    /**
-     * 64-bit FNV-1a hash of the grid: equal coverages always match, different ones collide with
-     * negligible probability. Used as the tile etag so unchanged tiles are not re-rendered.
-     */
-    fun fingerprint(): Long {
-        var hash = FNV_OFFSET
-        fun mix(value: Int) {
-            hash = (hash xor (value.toLong() and 0xFFFFFFFFL)) * FNV_PRIME
-        }
-        mix(side)
-        mix(capacity)
-        for (count in openCounts) mix(count)
-        return hash
+    /** FNV-1a over the grid, see [TileCoverage.fingerprint]. */
+    override fun fingerprint(): Long {
+        val hash = Fnv1a()
+        hash.mix(side)
+        hash.mix(capacity)
+        for (count in openCounts) hash.mix(count)
+        return hash.value
+    }
+}
+
+/** 64-bit FNV-1a over 32-bit values. */
+internal class Fnv1a {
+    var value: Long = OFFSET
+        private set
+
+    fun mix(item: Int) {
+        value = (value xor (item.toLong() and 0xFFFFFFFFL)) * PRIME
+    }
+
+    fun mix(item: Long) {
+        mix(item.toInt())
+        mix((item ushr 32).toInt())
     }
 
     private companion object {
-        const val FNV_OFFSET = -0x340d631b7bdddcdbL // 0xcbf29ce484222325
-        const val FNV_PRIME = 0x100000001b3L
+        const val OFFSET = -0x340d631b7bdddcdbL // 0xcbf29ce484222325
+        const val PRIME = 0x100000001b3L
     }
 }
 

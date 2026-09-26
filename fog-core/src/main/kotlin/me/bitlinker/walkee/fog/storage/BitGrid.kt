@@ -1,5 +1,10 @@
 package me.bitlinker.walkee.fog.storage
 
+/** Receives cell coordinates from [BitGrid.forEachSetBit] without boxing them. */
+fun interface CellVisitor {
+    fun visit(x: Int, y: Int)
+}
+
 /**
  * Immutable square bitmap with side `2^sideShift`, stored row-major, 64 bits per word.
  *
@@ -55,6 +60,32 @@ class BitGrid private constructor(
             }
         }
         return count
+    }
+
+    /**
+     * Calls [visitor] for every set bit in the rectangle `[fromX, toX) × [fromY, toY)`, row by row.
+     * Skips empty words, so the cost grows with the number of words and set bits, not cells.
+     */
+    fun forEachSetBit(fromX: Int, fromY: Int, toX: Int, toY: Int, visitor: CellVisitor) {
+        require(fromX in 0..side && toX in fromX..side && fromY in 0..side && toY in fromY..side) {
+            "Rectangle [$fromX, $toX) × [$fromY, $toY) exceeds the grid of side $side"
+        }
+        if (fromX == toX || isEmpty) return
+        for (y in fromY until toY) {
+            val rowStart = y shl sideShift
+            val start = rowStart + fromX
+            val end = rowStart + toX
+            for (word in (start ushr 6)..((end - 1) ushr 6)) {
+                val base = word shl 6
+                var bits = words[word]
+                if (start > base) bits = bits and (-1L shl (start - base))
+                if (end < base + 64) bits = bits and ((1L shl (end - base)) - 1)
+                while (bits != 0L) {
+                    visitor.visit(base + java.lang.Long.numberOfTrailingZeros(bits) - rowStart, y)
+                    bits = bits and (bits - 1)
+                }
+            }
+        }
     }
 
     /** This grid with the given cell indices additionally set; `this` if nothing changed. */

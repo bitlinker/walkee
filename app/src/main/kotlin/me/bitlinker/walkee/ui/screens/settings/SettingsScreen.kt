@@ -13,6 +13,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -24,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.bitlinker.walkee.R
+import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogStyle
 import kotlin.math.roundToInt
 
@@ -63,7 +67,25 @@ fun SettingsScreen(state: SettingsState, dispatch: (SettingsAction) -> Unit) {
 
             Spacer(Modifier.height(24.dp))
 
-            val zoomRange = FogStyle.DISPLAY_ZOOM_RANGE
+            Text(text = stringResource(R.string.settings_cell_shape), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                val shapes = FogCellShape.entries
+                shapes.forEachIndexed { index, shape ->
+                    SegmentedButton(
+                        selected = state.cellShape == shape,
+                        onClick = { dispatch(SettingsAction.CellShapeChanged(shape)) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = shapes.size),
+                        enabled = state.isLoaded,
+                    ) {
+                        Text(stringResource(shape.label()))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            val zoomRange = state.cellShape.displayZoomRange
             Text(
                 text = stringResource(R.string.settings_display_zoom) + " · " +
                     stringResource(R.string.settings_display_zoom_value, state.displayZoom, state.displayCellMetres),
@@ -79,4 +101,9 @@ fun SettingsScreen(state: SettingsState, dispatch: (SettingsAction) -> Unit) {
             )
         }
     }
+}
+
+private fun FogCellShape.label(): Int = when (this) {
+    FogCellShape.SQUARES -> R.string.settings_cell_shape_squares
+    FogCellShape.HEXAGONS -> R.string.settings_cell_shape_hexagons
 }

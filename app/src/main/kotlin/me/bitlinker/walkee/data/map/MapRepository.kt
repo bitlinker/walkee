@@ -21,6 +21,7 @@ import me.bitlinker.walkee.di.ApplicationScope
 import me.bitlinker.walkee.di.DefaultDispatcher
 import me.bitlinker.walkee.di.IoDispatcher
 import me.bitlinker.walkee.fog.geo.GeoPoint
+import me.bitlinker.walkee.fog.geo.HexLattice
 import me.bitlinker.walkee.fog.geo.TileKey
 import me.bitlinker.walkee.fog.storage.ChangeSet
 import me.bitlinker.walkee.fog.storage.MapStorage
@@ -40,7 +41,7 @@ data class FogProgress(val visitedCells: Long)
 
 /**
  * High-level fog operations on top of [MapStorage] (ADR 0004): brushes and strokes from
- * positions, coverage grids for tile rendering, progress, and disk persistence scheduling.
+ * positions, square and hexagon coverage for tile rendering, progress, and disk persistence scheduling.
  */
 @Singleton
 class MapRepository @Inject constructor(
@@ -94,6 +95,9 @@ class MapRepository @Inject constructor(
 
     /** Coverage grid for a map tile. Synchronous and thread-safe: called from MapKit worker threads. */
     fun coverage(tile: TileKey, displayZoom: Int): FogCoverage = FogCoverageBuilder.build(storage, tile, displayZoom)
+
+    /** Hexagon coverage for a map tile. Synchronous and thread-safe, like [coverage]. */
+    fun hexCoverage(tile: TileKey, displayZoom: Int): HexCoverage = HexCoverageBuilder.build(storage, tile, HexLattice(displayZoom))
 
     /** Writes unsaved chunks now (e.g. when the app goes to background). */
     suspend fun flush() {

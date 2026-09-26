@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.onStart
 import me.bitlinker.walkee.data.location.LocationRepository
 import me.bitlinker.walkee.data.map.FogCoverage
 import me.bitlinker.walkee.data.map.FogInvalidation
+import me.bitlinker.walkee.data.map.HexCoverage
 import me.bitlinker.walkee.data.map.MapRepository
+import me.bitlinker.walkee.data.settings.FogCellShape
 import me.bitlinker.walkee.data.settings.FogStyle
 import me.bitlinker.walkee.data.settings.SettingsRepository
 import me.bitlinker.walkee.fog.geo.FogGrid
@@ -20,6 +22,13 @@ class GetFogTileCoverageUseCase @Inject constructor(
     private val mapRepository: MapRepository,
 ) {
     operator fun invoke(tile: TileKey, displayZoom: Int): FogCoverage = mapRepository.coverage(tile, displayZoom)
+}
+
+/** Hexagon coverage for one map tile; synchronous for the same reason as [GetFogTileCoverageUseCase]. */
+class GetFogTileHexCoverageUseCase @Inject constructor(
+    private val mapRepository: MapRepository,
+) {
+    operator fun invoke(tile: TileKey, displayZoom: Int): HexCoverage = mapRepository.hexCoverage(tile, displayZoom)
 }
 
 class ObserveFogInvalidationsUseCase @Inject constructor(
@@ -44,6 +53,12 @@ class SetFogDisplayZoomUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) {
     suspend operator fun invoke(zoom: Int) = settingsRepository.setDisplayZoom(zoom)
+}
+
+class SetFogCellShapeUseCase @Inject constructor(
+    private val settingsRepository: SettingsRepository,
+) {
+    suspend operator fun invoke(shape: FogCellShape) = settingsRepository.setCellShape(shape)
 }
 
 class FlushFogUseCase @Inject constructor(
