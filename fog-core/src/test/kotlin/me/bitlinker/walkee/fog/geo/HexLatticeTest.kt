@@ -156,12 +156,69 @@ class HexLatticeTest {
         assertEquals(2.0, HexLattice(HexLattice.MAX_DISPLAY_ZOOM).width)
     }
 
+    @ParameterizedTest(name = "display zoom {0}")
+    @ValueSource(ints = [16, 17, 18, 19, 20])
+    fun `a cell touches exactly the hexagons its points fall into`(displayZoom: Int) {
+        val lattice = HexLattice(displayZoom)
+        val random = Random(displayZoom)
+        val world = 1 shl FogGrid.STORAGE_ZOOM
+        // Around Moscow and across the antimeridian, where columns go negative or past the world.
+        val cells = List(300) { (originX + random.nextInt(200)) to (originY + random.nextInt(200)) } +
+            List(100) { (random.nextInt(-100, 100)) to (originY + random.nextInt(200)) } +
+            List(100) { (world + random.nextInt(-100, 100)) to (originY + random.nextInt(200)) }
+        for ((x, y) in cells) {
+            val touched = touched(lattice, x, y)
+            assertTrue(touched.size in 1..2, "cell ($x, $y) touches $touched")
+            assertTrue(lattice.hexAt(x + 0.5, y + 0.5) in touched)
+            val sampled = sampled(lattice, x, y, 32)
+            assertTrue(touched.containsAll(sampled), "cell ($x, $y): touched $touched, sampled $sampled")
+            // Slivers can slip between coarse samples; sample those hexagons finely.
+            for (hex in touched - sampled) {
+                assertTrue(hex in sampled(lattice, x, y, 512), "cell ($x, $y) does not reach $hex")
+            }
+        }
+    }
+
+    @Test
+    fun `a boundary line shared with a hexagon does not count as touching`() {
+        val lattice = HexLattice(18) // 8 cells wide: edges between hexagons of a row lie on cell boundaries
+        val hex = HexKey.of(2, 5)
+        val eastEdge = (lattice.centerX(hex.row, hex.col) + lattice.width / 2).toInt()
+        val y = lattice.centerY(hex.row).toInt()
+        assertEquals(setOf(hex), touched(lattice, eastEdge - 1, y))
+        assertEquals(setOf(lattice.neighbour(hex, HexLattice.EAST)), touched(lattice, eastEdge, y))
+    }
+
+    @Test
+    fun `most cells touch one hexagon, cells on slanted edges two`() {
+        val lattice = HexLattice(18)
+        val counts = (0 until 14).flatMap { y -> (0 until 8).map { x -> touched(lattice, originX + x, originY + y).size } }
+        // One period of the lattice: 8 × 14 cells, 24 of them on slanted edges.
+        assertEquals(88, counts.count { it == 1 })
+        assertEquals(24, counts.count { it == 2 })
+    }
+
+    @Test
+    fun `lattices are shared per display zoom`() {
+        assertTrue(HexLattice.of(18) === HexLattice.of(18))
+        assertEquals(17, HexLattice.of(17).displayZoom)
+        assertThrows(IllegalArgumentException::class.java) { HexLattice.of(FogGrid.STORAGE_ZOOM) }
+    }
+
     @Test
     fun `hex keys pack negative rows and columns`() {
         val key = HexKey.of(-3, -70_000)
         assertEquals(-3, key.row)
         assertEquals(-70_000, key.col)
         assertEquals(HexKey.of(-3, -69_999), HexKey.of(key.row, key.col + 1))
+    }
+
+    private fun touched(lattice: HexLattice, x: Int, y: Int): Set<HexKey> =
+        buildSet { lattice.forEachHexTouching(x, y) { add(it) } }
+
+    /** Hexagons of an `n × n` grid of points inside the cell. */
+    private fun sampled(lattice: HexLattice, x: Int, y: Int, n: Int): Set<HexKey> = buildSet {
+        for (sy in 0 until n) for (sx in 0 until n) add(lattice.hexAt(x + (sx + 0.5) / n, y + (sy + 0.5) / n))
     }
 
     /** Nearest centre over a generous neighbourhood; ties go north, then east (see [HexLattice]). */

@@ -1,5 +1,6 @@
 package me.bitlinker.walkee.fog.geo
 
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.sqrt
 
@@ -17,6 +18,9 @@ import kotlin.math.sqrt
  *   the antimeridian.
  * - A hexagon is the set of points nearer to its centre than to any other centre. Ties go to the
  *   eastern hexagon within a row and to the northern row between rows.
+ * - A storage cell opens every hexagon it overlaps ([forEachHexTouching]).
+ *
+ * Lattices are immutable; [of] shares one per display zoom so that its touch table is built once.
  */
 class HexLattice(val displayZoom: Int) {
 
@@ -123,16 +127,124 @@ class HexLattice(val displayZoom: Int) {
         return edgeDistance[direction] - (dx * unitX[direction] + dy * unitY[direction])
     }
 
+    /**
+     * Calls [action] for every hexagon that storage cell `(cellX, cellY)`, the square
+     * `[cellX, cellX + 1] × [cellY, cellY + 1]`, overlaps with positive area: one for most cells,
+     * more along edges and at vertices. A cell that only shares a boundary line with a hexagon
+     * does not count. Columns are not wrapped, like [hexAt].
+     */
+    inline fun forEachHexTouching(cellX: Int, cellY: Int, action: (HexKey) -> Unit) {
+        val table = touchTable
+        val periodX = table.periodX
+        val periodY = table.periodY
+        val shiftX = Math.floorDiv(cellX, periodX)
+        val shiftY = Math.floorDiv(cellY, periodY)
+        val entry = (cellY - shiftY * periodY) * periodX + (cellX - shiftX * periodX)
+        val rowShift = shiftY * table.periodRows
+        for (i in table.start[entry] until table.start[entry + 1]) {
+            action(HexKey.of(table.rows[i] + rowShift, table.cols[i] + shiftX))
+        }
+    }
+
+    /**
+     * Hexagons touched by each cell of one period of the lattice. Shifting by [periodX] cells east
+     * moves every hexagon one column; shifting by [periodY] cells south moves it [periodRows] rows,
+     * an even number, so row parity and with it the column offset are preserved.
+     */
+    @PublishedApi
+    internal class TouchTable(
+        val periodX: Int,
+        val periodY: Int,
+        val periodRows: Int,
+        /** Entry `y · periodX + x` spans `start[entry] until start[entry + 1]` of [rows] and [cols]. */
+        val start: IntArray,
+        val rows: IntArray,
+        val cols: IntArray,
+    )
+
+    @PublishedApi
+    internal val touchTable: TouchTable by lazy(::buildTouchTable)
+
+    private fun buildTouchTable(): TouchTable {
+        val periodX = width.toInt()
+        var periodRows = 2
+        while ((periodRows * rowSpacing) % 1.0 != 0.0) periodRows *= 2
+        val periodY = (periodRows * rowSpacing).toInt()
+        val start = IntArray(periodX * periodY + 1)
+        val rows = ArrayList<Int>()
+        val cols = ArrayList<Int>()
+        for (y in 0 until periodY) {
+            for (x in 0 until periodX) {
+                start[y * periodX + x] = rows.size
+                for (row in rowRange(y.toDouble(), y + 1.0)) {
+                    for (col in columnRange(x.toDouble(), x + 1.0)) {
+                        if (overlapArea(HexKey.of(row, col), x, y) > MIN_OVERLAP) {
+                            rows += row
+                            cols += col
+                        }
+                    }
+                }
+            }
+        }
+        start[periodX * periodY] = rows.size
+        return TouchTable(periodX, periodY, periodRows, start, rows.toIntArray(), cols.toIntArray())
+    }
+
+    /** Area of the unit square at `(x, y)` inside [hex]: the square clipped by the six edge lines. */
+    private fun overlapArea(hex: HexKey, x: Int, y: Int): Double {
+        var xs = listOf(x.toDouble(), x + 1.0, x + 1.0, x.toDouble())
+        var ys = listOf(y.toDouble(), y.toDouble(), y + 1.0, y + 1.0)
+        for (direction in 0 until DIRECTIONS) {
+            val clippedX = ArrayList<Double>(xs.size + 1)
+            val clippedY = ArrayList<Double>(xs.size + 1)
+            for (i in xs.indices) {
+                val j = (i + 1) % xs.size
+                val di = distanceToEdge(hex, xs[i], ys[i], direction)
+                val dj = distanceToEdge(hex, xs[j], ys[j], direction)
+                if (di >= 0) {
+                    clippedX += xs[i]
+                    clippedY += ys[i]
+                }
+                if ((di >= 0) != (dj >= 0)) {
+                    val t = di / (di - dj)
+                    clippedX += xs[i] + t * (xs[j] - xs[i])
+                    clippedY += ys[i] + t * (ys[j] - ys[i])
+                }
+            }
+            if (clippedX.size < 3) return 0.0
+            xs = clippedX
+            ys = clippedY
+        }
+        var twiceArea = 0.0
+        for (i in xs.indices) {
+            val j = (i + 1) % xs.size
+            twiceArea += xs[i] * ys[j] - xs[j] * ys[i]
+        }
+        return abs(twiceArea) / 2
+    }
+
     private fun rowOffset(row: Int): Double = if (row and 1 == 0) 0.0 else width / 2
 
     private fun nearestColumn(row: Int, x: Double): Int = floor((x - rowOffset(row)) / width + 0.5).toInt()
 
     companion object {
         /**
-         * Hexagons must be at least two storage cells wide: one cell wide, some of them would not
-         * contain any cell centre and could never open.
+         * Hexagons must be at least two storage cells wide: one cell wide, they would be no larger
+         * than the cells that open them, and every cell would open several at once.
          */
         const val MAX_DISPLAY_ZOOM = FogGrid.STORAGE_ZOOM - 1
+
+        /**
+         * Overlaps below this are rounding noise from cells that only share a boundary line with a
+         * hexagon: vertices lie on multiples of `W / 112`, so real overlaps are orders larger.
+         */
+        private const val MIN_OVERLAP = 1e-9
+
+        private val shared = arrayOfNulls<HexLattice>(MAX_DISPLAY_ZOOM + 1)
+
+        /** The shared lattice for [displayZoom]. */
+        fun of(displayZoom: Int): HexLattice =
+            shared.getOrNull(displayZoom) ?: HexLattice(displayZoom).also { shared[displayZoom] = it }
 
         const val WEST = 0
         const val EAST = 1

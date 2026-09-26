@@ -100,7 +100,7 @@ class MapRepository @Inject constructor(
         FogCoverageBuilder.build(storage, tile, displayZoom, margin)
 
     /** Hexagon coverage for a map tile. Synchronous and thread-safe, like [coverage]. */
-    fun hexCoverage(tile: TileKey, displayZoom: Int): HexCoverage = HexCoverageBuilder.build(storage, tile, HexLattice(displayZoom))
+    fun hexCoverage(tile: TileKey, displayZoom: Int): HexCoverage = HexCoverageBuilder.build(storage, tile, HexLattice.of(displayZoom))
 
     /**
      * Forgets all explored area, in memory and on disk, and refreshes the fog. Serialized with

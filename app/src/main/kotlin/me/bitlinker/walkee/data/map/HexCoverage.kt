@@ -12,8 +12,8 @@ import kotlin.math.min
 
 /**
  * Hexagonal cells (ADR 0003): the window of [lattice] hexagons that points of [tile] can fall into
- * and which of them are open. A hexagon is open when at least one storage cell whose centre lies
- * in it was visited (ADR 0001).
+ * and which of them are open. A hexagon is open when at least one visited storage cell overlaps it
+ * (ADR 0001).
  */
 class HexCoverage(
     val tile: TileKey,
@@ -82,9 +82,9 @@ object HexCoverageBuilder {
         val cols = colRange.last - firstCol + 1
         val bits = LongArray(HexCoverage.wordCount(rows * cols))
 
-        // Storage cells whose centres can lie in the window's hexagons: a hexagon reaches half a
-        // width east and west of its centre (odd rows are shifted half a width east) and
-        // halfHeight north and south. Columns stay unwrapped; chunks are looked up wrapped.
+        // Storage cells that can overlap the window's hexagons: a hexagon reaches half a width east
+        // and west of its centre (odd rows are shifted half a width east) and halfHeight north and
+        // south. Columns stay unwrapped; chunks are looked up wrapped.
         val fromX = floor(firstCol * lattice.width - lattice.width / 2).toInt()
         val toX = ceil(colRange.last * lattice.width + lattice.width).toInt()
         val fromY = max(0, floor(firstRow * lattice.rowSpacing - lattice.halfHeight).toInt())
@@ -101,12 +101,13 @@ object HexCoverageBuilder {
                         max(fromX - baseX, 0), max(fromY - baseY, 0),
                         min(toX - baseX, FogGrid.CHUNK_SIDE), min(toY - baseY, FogGrid.CHUNK_SIDE),
                     ) { x, y ->
-                        val hex = lattice.hexAt(baseX + x + 0.5, baseY + y + 0.5)
-                        val row = hex.row - firstRow
-                        val col = hex.col - firstCol
-                        if (row in 0 until rows && col in 0 until cols) {
-                            val index = row * cols + col
-                            bits[index ushr 6] = bits[index ushr 6] or (1L shl (index and 63))
+                        lattice.forEachHexTouching(baseX + x, baseY + y) { hex ->
+                            val row = hex.row - firstRow
+                            val col = hex.col - firstCol
+                            if (row in 0 until rows && col in 0 until cols) {
+                                val index = row * cols + col
+                                bits[index ushr 6] = bits[index ushr 6] or (1L shl (index and 63))
+                            }
                         }
                     }
                 }

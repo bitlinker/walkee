@@ -25,6 +25,8 @@ class HexCoverageBuilderTest {
 
     private fun hexOf(cell: TileKey): HexKey = lattice.hexAt(cell.x + 0.5, cell.y + 0.5)
 
+    private fun touched(cell: TileKey): Set<HexKey> = buildSet { lattice.forEachHexTouching(cell.x, cell.y) { add(it) } }
+
     private fun build(tile: TileKey) = HexCoverageBuilder.build(storage, tile, lattice)
 
     @Test
@@ -40,6 +42,7 @@ class HexCoverageBuilderTest {
 
     @Test
     fun `a single visited cell opens exactly its hexagon in every tile that shows it`() {
+        assertEquals(setOf(hexOf(cell)), touched(cell), "Moscow's cell lies inside one hexagon")
         storage.markVisited(listOf(cell))
         val hex = hexOf(cell)
         for (zoom in 12..23) {
@@ -48,6 +51,17 @@ class HexCoverageBuilderTest {
             assertTrue(coverage.isOpen(hex), "z$zoom")
             assertEquals(1, coverage.openCount, "z$zoom")
         }
+    }
+
+    @Test
+    fun `a cell on an edge opens both hexagons it touches`() {
+        // Edges between hexagons of one row lie on cell boundaries; slanted edges cross cells.
+        val onEdge = (0 until 14).flatMap { dy -> (0 until 8).map { dx -> cell(cell.x + dx, cell.y + dy) } }
+            .first { touched(it).size == 2 }
+        storage.markVisited(listOf(onEdge))
+        val coverage = build(onEdge.ancestor(15))
+        assertTrue(touched(onEdge).all { it in coverage && coverage.isOpen(it) })
+        assertEquals(2, coverage.openCount)
     }
 
     @Test
@@ -63,13 +77,16 @@ class HexCoverageBuilderTest {
 
         val coverage = build(chunk)
         assertTrue(coverage.isOpen(hexOf(outside)))
-        assertEquals(1, coverage.openCount)
+        assertEquals(touched(outside).count { it in coverage }, coverage.openCount)
     }
 
     @Test
     fun `hexagons straddling the antimeridian open on both sides`() {
         // An even row's column `columns` is centred exactly on the antimeridian.
-        val y = (657_400 until 657_440).first { hexAtCell(worldCells - 1, it).col == lattice.columns }
+        val y = (657_400 until 657_440).first {
+            touched(cell(worldCells - 1, it)) == setOf(hexAtCell(worldCells - 1, it)) &&
+                hexAtCell(worldCells - 1, it).col == lattice.columns
+        }
         storage.markVisited(listOf(cell(worldCells - 1, y)))
         val row = hexAtCell(worldCells - 1, y).row
         val tileY = y shr (FogGrid.STORAGE_ZOOM - 18)
@@ -89,7 +106,7 @@ class HexCoverageBuilderTest {
         val originY = cell.y - 600
         val visited = List(400) { cell(originX + random.nextInt(1200), originY + random.nextInt(1200)) }
         storage.markVisited(visited)
-        val open = visited.map(::hexOf).toSet()
+        val open = visited.flatMap(::touched).toSet()
 
         for (zoom in listOf(12, 13, 15, 17, 18, 19, 20, 21)) {
             val tile = cell.ancestor(zoom)
@@ -118,9 +135,9 @@ class HexCoverageBuilderTest {
         val after = build(tile)
         assertTrue(before.fingerprint() != after.fingerprint())
 
-        // Another storage cell of the same hexagon does not change what is shown.
+        // Another storage cell touching the same hexagon only does not change what is shown.
         val sibling = (-1..1).flatMap { dy -> (-1..1).map { dx -> cell(cell.x + dx, cell.y + dy) } }
-            .first { it != cell && hexOf(it) == hexOf(cell) }
+            .first { it != cell && touched(it) == touched(cell) }
         storage.markVisited(listOf(sibling))
         assertEquals(after.fingerprint(), build(tile).fingerprint())
     }
