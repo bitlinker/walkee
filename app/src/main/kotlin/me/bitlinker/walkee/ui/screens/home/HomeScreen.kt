@@ -86,7 +86,12 @@ private fun ProgressCard(state: HomeState, modifier: Modifier = Modifier) {
     val numbers = NumberFormat.getIntegerInstance(Locale.getDefault())
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)),
+        // A translucent container matches no scheme colour, so the content colour must be explicit:
+        // otherwise it falls back to black, unreadable on the dark surface.
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text(stringResource(R.string.home_progress_title), style = MaterialTheme.typography.labelMedium)
